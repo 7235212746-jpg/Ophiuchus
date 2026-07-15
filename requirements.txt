@@ -1,0 +1,8 @@
+# Scientific runtime. pymatgen is required for every CIF-derived XRD pattern;
+# Ophi deliberately has no alternative CIF simulation fallback.
+numpy
+pandas
+scipy
+matplotlib
+pymatgen
+mp-api

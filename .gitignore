@@ -1,0 +1,37 @@
+.env
+.env.*
+*.secret
+*.secrets
+local_settings.json
+settings.local.json
+
+# Python and test artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local research data, caches, state, and generated reports
+data/
+results/
+exports/
+tmp_vesta_probe/
+xrd_sandbox/inputs/
+xrd_sandbox/runs/
+*.sqlite
+*.sqlite-*
+*.db
+*.log
+
+# Internal agent work notes are not part of the public distribution
+.superpowers/
+docs/superpowers/
+docs/implementation_plan_long_prompt.md
+docs/product_brainstorm.md
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
