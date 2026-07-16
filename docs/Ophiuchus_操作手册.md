@@ -44,7 +44,9 @@ python -m pip install -r requirements.txt
 
 ### 3.1 双击启动
 
-双击项目根目录中的 `start_ophiuchus.bat`。启动脚本会优先寻找已配置的 `ophi` 环境，找不到时再尝试系统 Python。
+优先双击项目根目录中的 `Ophiuchus.exe`，可在不显示命令行黑窗的情况下启动。也可以双击 `start_ophiuchus.bat`；启动脚本会优先寻找已配置的 `ophi` 环境，找不到时再尝试系统 Python。修改启动器源码后，双击 `build_launcher_exe.bat` 可重新生成 exe。
+
+项目文件夹可以放在任意本地目录。需要桌面入口时，双击 `install_desktop_shortcut.bat`；它会根据当前项目位置和当前用户的真实桌面自动创建 `Start Ophiuchus` 快捷方式。移动项目文件夹后，再运行一次该安装脚本即可更新桌面入口。
 
 ### 3.2 命令行启动
 

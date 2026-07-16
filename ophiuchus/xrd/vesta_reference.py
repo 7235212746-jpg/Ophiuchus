@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 
+from ..paths import desktop_dir
 from .models import Peak
 from .peaks import find_peaks
 from .importers import normalize_pattern
@@ -22,8 +23,16 @@ def find_local_vesta_references(formula: str) -> list[dict[str, Path | str]]:
     if configured:
         roots.append(Path(configured))
     else:
-        desktop = Path.home() / "OneDrive" / "Desktop"
-        roots.extend([desktop / "XRD", desktop / "结构", desktop])
+        desktop = desktop_dir()
+        roots.extend(
+            [
+                desktop / "03_实验数据与分析" / "XRD与研相" / "XRD",
+                desktop / "03_实验数据与分析" / "结构与CIF" / "结构",
+                desktop / "XRD",
+                desktop / "结构",
+                desktop,
+            ]
+        )
     needle = _norm_formula_text(formula)
     matches: list[Path] = []
     override = _formula_override_reference(needle)

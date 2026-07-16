@@ -13,6 +13,7 @@ from typing import Iterable
 import numpy as np
 from scipy.signal import find_peaks
 
+from ..paths import desktop_dir
 from .backend import SimulatedPattern, SimulationContext
 from .config import XRDConfig
 from .models import Peak
@@ -61,11 +62,12 @@ class RietanProfile:
 
 
 def discover_vesta_executable(configured: str | Path | None = None) -> Path | None:
+    desktop = desktop_dir()
     candidates = [
         configured,
         os.environ.get("OPHI_VESTA_EXE"),
-        Path.home() / "OneDrive" / "Desktop" / "VESTA-win64" / "VESTA.exe",
-        Path.home() / "Desktop" / "VESTA-win64" / "VESTA.exe",
+        desktop / "02_科研软件" / "便携软件" / "VESTA-win64" / "VESTA.exe",
+        desktop / "VESTA-win64" / "VESTA.exe",
         Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "VESTA-win64" / "VESTA.exe",
     ]
     return _first_existing_file(candidates)

@@ -17,6 +17,7 @@ from ophiuchus.app import (
     default_app_state_path,
     default_library_path,
     inspect_peak_from_app,
+    initial_window_geometry,
     import_local_cifs_to_library,
     import_target_cif_to_library,
     load_database_api_config,
@@ -27,6 +28,7 @@ from ophiuchus.app import (
     apply_vesta_env_config,
     materials_project_harvest_from_app,
     resolve_target_phase_selection,
+    repair_app_state_paths,
     run_library_analysis_from_app,
     save_database_api_config,
     save_app_state,
@@ -43,6 +45,15 @@ from ophiuchus.session_storage import TransientAnalysisStore
 
 
 class AppExperienceTests(unittest.TestCase):
+    def test_initial_window_geometry_fits_common_laptop_work_area(self):
+        geometry = initial_window_geometry(1536, 864)
+        width, height = (int(value) for value in geometry.split("+", 1)[0].split("x"))
+
+        self.assertEqual(width, 1240)
+        self.assertLessEqual(height, 700)
+        self.assertGreaterEqual(height, 620)
+        self.assertRegex(geometry, r"^\d+x\d+\+\d+\+\d+$")
+
     def test_app_destroy_cancels_pending_result_poll(self):
         app = OphiuchusApp()
         callback_id = app._poll_after_id
@@ -97,9 +108,47 @@ class AppExperienceTests(unittest.TestCase):
             self.assertEqual(supplement.call_args.args[1], {"Fe", "Ge"})
         finally:
             app.destroy()
-    def test_default_candidate_dir_prefers_desktop_structure_folder(self):
-        expected = Path.home() / "OneDrive" / "Desktop" / "结构"
-        self.assertEqual(default_candidate_dir(), expected)
+    def test_default_candidate_dir_prefers_existing_categorized_desktop_structure_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            desktop = Path(tmp) / "Desktop"
+            expected = desktop / "03_实验数据与分析" / "结构与CIF" / "结构"
+            expected.mkdir(parents=True)
+            with mock.patch("ophiuchus.app.desktop_dir", return_value=desktop):
+                self.assertEqual(default_candidate_dir(Path(tmp) / "project"), expected)
+
+    def test_repair_app_state_paths_remaps_moved_project_files_and_clears_missing_xrd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "Ophiuchus"
+            (root / "data").mkdir(parents=True)
+            (root / "results" / "980").mkdir(parents=True)
+            old_root = Path(tmp) / "old" / "Ophiuchus" / "Ophiuchus"
+            state = {
+                "xrd_file": str(Path(tmp) / "missing.asc"),
+                "out_dir": str(old_root / "results" / "980"),
+                "cache_path": str(old_root / "data" / "ophi_xrd_cache.sqlite"),
+                "library_path": str(old_root / "data" / "ophi_library.sqlite"),
+                "vesta_exe": str(old_root / "tools" / "VESTA.exe"),
+                "rietan_exe": str(old_root / "tools" / "RIETAN.exe"),
+            }
+
+            repaired = repair_app_state_paths(state, root=root)
+
+            self.assertEqual(repaired["xrd_file"], "")
+            self.assertEqual(Path(repaired["out_dir"]), root / "results" / "980")
+            self.assertEqual(Path(repaired["cache_path"]), root / "data" / "ophi_xrd_cache.sqlite")
+            self.assertEqual(Path(repaired["library_path"]), root / "data" / "ophi_library.sqlite")
+            self.assertNotIn("vesta_exe", repaired)
+            self.assertNotIn("rietan_exe", repaired)
+
+    def test_repair_app_state_paths_does_not_duplicate_results_folder_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "Ophiuchus"
+            (root / "results").mkdir(parents=True)
+            state = {"out_dir": str(Path(tmp) / "old" / "Ophiuchus" / "results")}
+
+            repaired = repair_app_state_paths(state, root=root)
+
+            self.assertEqual(Path(repaired["out_dir"]), root / "results")
 
     def test_build_output_dir_uses_xrd_stem_under_project_results(self):
         out = build_output_dir(Path(r"C:\data\ZrFe6Ge4 900.asc"), Path(r"C:\project"))
@@ -116,6 +165,15 @@ class AppExperienceTests(unittest.TestCase):
     def test_default_app_state_path_lives_under_project_data(self):
         state = default_app_state_path(Path(r"C:\project"))
         self.assertEqual(state, Path(r"C:\project\data\ophi_app_state.json"))
+
+    def test_load_app_state_accepts_windows_utf8_bom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "state.json"
+            state_path.write_bytes(b"\xef\xbb\xbf{\"elements\": \"Zr Fe Ge\"}")
+
+            state = load_app_state(state_path)
+
+        self.assertEqual(state["elements"], "Zr Fe Ge")
 
     def test_workbench_sections_match_phase2_navigation(self):
         labels = [section["label"] for section in workbench_sections()]
@@ -315,6 +373,38 @@ class AppExperienceTests(unittest.TestCase):
         self.assertEqual(loaded["vesta_exe"], str(exe))
         self.assertEqual(loaded["rietan_exe"], str(rietan))
         self.assertEqual(loaded["reference_dir"], str(refs))
+
+    def test_vesta_config_ignores_reference_directory_from_another_computer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fallback = root / "XRD"
+            fallback.mkdir()
+            env_path = root / ".env"
+            env_path.write_text(
+                "OPHI_VESTA_REFERENCE_DIR=C:\\Users\\someone_else\\Desktop\\XRD\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch("ophiuchus.app.default_xrd_dir", return_value=fallback):
+                loaded = load_vesta_config(env_path)
+
+        self.assertEqual(loaded["reference_dir"], str(fallback))
+
+    def test_vesta_config_ignores_missing_executable_from_another_computer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            discovered = root / "VESTA.exe"
+            discovered.write_text("", encoding="utf-8")
+            env_path = root / ".env"
+            env_path.write_text(
+                "OPHI_VESTA_EXE=C:\\Users\\someone_else\\Desktop\\VESTA.exe\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch("ophiuchus.app.find_vesta_executable", return_value=str(discovered)):
+                loaded = load_vesta_config(env_path)
+
+        self.assertEqual(loaded["vesta_exe"], str(discovered))
 
     def test_simulation_validation_summary_lines_show_failed_vesta_candidates(self):
         failed = Candidate("bad", "ZrFe6Ge4", "library:local", "", ["Zr", "Fe", "Ge"], None)

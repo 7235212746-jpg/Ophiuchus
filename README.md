@@ -6,6 +6,8 @@ Current version: v0.2.0-dev
 
 Maintainer contact: `wanyc@issp.u-tokyo.ac.jp`
 
+On Windows, double-click `Ophiuchus.exe` to launch without a console window. The project folder can live anywhere. Run `install_desktop_shortcut.bat` after cloning or moving the folder to create a desktop shortcut that resolves the current path at runtime. Rebuild the launcher with `build_launcher_exe.bat` after changing its wrapper source.
+
 Ophiuchus is a local-first materials research workflow project. Phase 1 is the Ophi XRD Candidate Screener. Phase 2 is building the local structure library and evidence workbench foundation.
 
 ## What v0.1.0 Does

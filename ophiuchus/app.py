@@ -28,6 +28,7 @@ from .periodic_table import (
     parse_element_symbols,
     show_periodic_table,
 )
+from .paths import desktop_dir, first_existing_directory
 from .phase_stripping.window import PhaseStrippingWindow, open_or_raise_phase_stripping_window
 from .refinement.window import RefinementWindow, open_or_raise_refinement_window
 from .refinement.oxide_candidates import supplement_common_oxide_library
@@ -59,9 +60,33 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def default_candidate_dir() -> Path:
-    desktop_structure = Path.home() / "OneDrive" / "Desktop" / "结构"
-    return desktop_structure
+def default_candidate_dir(root: Path | None = None) -> Path:
+    desktop = desktop_dir()
+    candidates = (
+        desktop / "03_实验数据与分析" / "结构与CIF" / "结构",
+        desktop / "结构",
+        (root or project_root()) / "data" / "library",
+        (root or project_root()) / "data",
+    )
+    return next((path for path in candidates if path.is_dir()), desktop)
+
+
+def default_xrd_dir() -> Path:
+    desktop = desktop_dir()
+    candidates = (
+        desktop / "03_实验数据与分析" / "XRD与研相" / "XRD",
+        desktop / "XRD",
+        desktop,
+    )
+    return next(path for path in candidates if path.is_dir())
+
+
+def initial_window_geometry(screen_width: int, screen_height: int) -> str:
+    width = min(1240, max(980, screen_width - 80))
+    height = min(700, max(620, int(screen_height * 0.78)))
+    left = max(0, (screen_width - width) // 2)
+    top = max(0, (screen_height - height) // 2)
+    return f"{width}x{height}+{left}+{top}"
 
 
 def default_cache_path(root: Path | None = None) -> Path:
@@ -108,7 +133,7 @@ def load_app_state(state_path: str | Path) -> dict[str, str]:
     if not path.exists():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
         return {}
     if not isinstance(payload, dict):
@@ -121,6 +146,45 @@ def save_app_state(state_path: str | Path, state: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {key: str(value) for key, value in state.items() if key in APP_STATE_KEYS and value is not None}
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def repair_app_state_paths(state: dict[str, str], root: Path | None = None) -> dict[str, str]:
+    """Repair paths saved before the portable project folder was moved."""
+    base = root or project_root()
+    repaired = dict(state)
+    xrd_file = repaired.get("xrd_file", "").strip()
+    if xrd_file and not Path(xrd_file).is_file():
+        repaired["xrd_file"] = ""
+
+    candidate_dir = repaired.get("candidate_dir", "").strip()
+    if candidate_dir and not Path(candidate_dir).is_dir():
+        repaired["candidate_dir"] = str(default_candidate_dir(base))
+
+    out_dir = repaired.get("out_dir", "").strip()
+    if not out_dir or not Path(out_dir).is_dir():
+        suffix = Path(out_dir).name if out_dir else ""
+        repaired["out_dir"] = (
+            str(base / "results" / suffix)
+            if suffix and suffix.lower() != "results"
+            else str(base / "results")
+        )
+
+    cache_path = repaired.get("cache_path", "").strip()
+    if not cache_path or not Path(cache_path).is_file():
+        repaired["cache_path"] = str(default_cache_path(base))
+
+    library_path = repaired.get("library_path", "").strip()
+    if not library_path or not Path(library_path).is_file():
+        repaired["library_path"] = str(default_library_path(base))
+
+    reference_dir = repaired.get("vesta_reference_dir", "").strip()
+    if reference_dir and not Path(reference_dir).is_dir():
+        repaired["vesta_reference_dir"] = str(default_xrd_dir())
+    for key in ("vesta_exe", "rietan_exe"):
+        configured = repaired.get(key, "").strip()
+        if configured and not Path(configured).is_file():
+            repaired.pop(key, None)
+    return repaired
 
 
 def read_local_env(env_path: str | Path) -> dict[str, str]:
@@ -208,12 +272,14 @@ def find_vesta_executable(env_path: str | Path | None = None) -> str:
     configured = values.get("OPHI_VESTA_EXE", "")
     if configured and Path(configured).exists():
         return configured
+    desktop = desktop_dir()
     candidates = [
         Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "VESTA-win64" / "VESTA.exe",
         Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "VESTA" / "VESTA.exe",
         Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "VESTA-win64" / "VESTA.exe",
-        Path.home() / "Desktop" / "VESTA.exe",
-        Path.home() / "Desktop" / "VESTA-win64" / "VESTA.exe",
+        desktop / "02_科研软件" / "便携软件" / "VESTA-win64" / "VESTA.exe",
+        desktop / "VESTA.exe",
+        desktop / "VESTA-win64" / "VESTA.exe",
         Path.home() / "OneDrive" / "Desktop" / "VESTA.exe",
         Path.home() / "OneDrive" / "Desktop" / "VESTA-win64" / "VESTA.exe",
     ]
@@ -227,10 +293,12 @@ def load_vesta_config(env_path: str | Path | None = None) -> dict[str, str]:
     path = env_path or default_env_path()
     apply_vesta_env_config(path)
     values = read_local_env(path)
+    configured_reference = values.get("OPHI_VESTA_REFERENCE_DIR", "").strip()
+    reference_dir = Path(configured_reference) if configured_reference else None
     return {
-        "vesta_exe": values.get("OPHI_VESTA_EXE", "") or find_vesta_executable(path),
+        "vesta_exe": find_vesta_executable(path),
         "rietan_exe": str(discover_rietan_executable(values.get("OPHI_RIETAN_EXE", "")) or ""),
-        "reference_dir": values.get("OPHI_VESTA_REFERENCE_DIR", str(Path.home() / "OneDrive" / "Desktop" / "XRD")),
+        "reference_dir": str(reference_dir if reference_dir and reference_dir.is_dir() else default_xrd_dir()),
     }
 
 
@@ -238,8 +306,10 @@ def apply_vesta_env_config(env_path: str | Path | None = None) -> None:
     values = read_local_env(env_path or default_env_path())
     for key, value in values.items():
         if key in {"OPHI_VESTA_EXE", "OPHI_RIETAN_EXE", "OPHI_VESTA_REFERENCE_DIR"} or key.startswith("OPHI_VESTA_REFERENCE_"):
-            if value:
+            if value and Path(value).exists():
                 os.environ[key] = value
+            else:
+                os.environ.pop(key, None)
 
 
 def save_vesta_config(
@@ -584,8 +654,8 @@ class OphiuchusApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Ophiuchus")
-        self.geometry("1240x800")
-        self.minsize(1100, 680)
+        self.geometry(initial_window_geometry(self.winfo_screenwidth(), self.winfo_screenheight()))
+        self.minsize(1000, 620)
         self.configure(bg=COLORS["background"])
         self.result_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.running = False
@@ -918,7 +988,7 @@ class OphiuchusApp(tk.Tk):
             self.status_var.set("已加载本地 Materials Project API 配置。")
 
     def _restore_app_state(self) -> None:
-        state = load_app_state(default_app_state_path())
+        state = repair_app_state_paths(load_app_state(default_app_state_path()))
         if not state:
             return
         mapping = {
@@ -1294,7 +1364,7 @@ class OphiuchusApp(tk.Tk):
 
     def _pick_xrd(self) -> None:
         path = filedialog.askopenfilename(
-            initialdir=str(Path.home() / "OneDrive" / "Desktop" / "XRD"),
+            initialdir=str(first_existing_directory(self.xrd_var.get(), fallback=default_xrd_dir())),
             filetypes=[("XRD files", "*.asc *.ras *.raw *.xy *.txt *.csv *.dat"), ("All files", "*.*")],
         )
         if path:
@@ -1302,19 +1372,23 @@ class OphiuchusApp(tk.Tk):
             self.status_var.set("已选择实验谱。下一步选择候选结构/模拟峰文件夹。")
 
     def _pick_dir(self) -> None:
-        path = filedialog.askdirectory(initialdir=str(default_candidate_dir()))
+        path = filedialog.askdirectory(
+            initialdir=str(first_existing_directory(self.dir_var.get(), fallback=default_candidate_dir()))
+        )
         if path:
             self.dir_var.set(path)
             self.status_var.set("已选择候选来源。确认元素范围后即可开始筛选。")
 
     def _pick_out(self) -> None:
-        path = filedialog.askdirectory(initialdir=str(project_root() / "results"))
+        path = filedialog.askdirectory(
+            initialdir=str(first_existing_directory(self.out_var.get(), fallback=project_root() / "results"))
+        )
         if path:
             self.out_var.set(path)
 
     def _pick_cache(self) -> None:
         path = filedialog.asksaveasfilename(
-            initialdir=str(default_cache_path().parent),
+            initialdir=str(first_existing_directory(self.cache_var.get(), fallback=default_cache_path().parent)),
             initialfile=default_cache_path().name,
             defaultextension=".sqlite",
             filetypes=[("SQLite cache", "*.sqlite *.db"), ("All files", "*.*")],
@@ -1324,7 +1398,7 @@ class OphiuchusApp(tk.Tk):
 
     def _pick_library(self) -> None:
         path = filedialog.asksaveasfilename(
-            initialdir=str(default_library_path().parent),
+            initialdir=str(first_existing_directory(self.library_var.get(), fallback=default_library_path().parent)),
             initialfile=default_library_path().name,
             defaultextension=".sqlite",
             filetypes=[("SQLite library", "*.sqlite *.db"), ("All files", "*.*")],
@@ -1359,7 +1433,7 @@ class OphiuchusApp(tk.Tk):
             messagebox.showwarning("还缺少必要输入", "请先选择本地结构库数据库。")
             return
         path = filedialog.askopenfilename(
-            initialdir=str(default_candidate_dir()),
+            initialdir=str(first_existing_directory(self.dir_var.get(), fallback=default_candidate_dir())),
             title="选择目标相 CIF",
             filetypes=[("CIF files", "*.cif"), ("All files", "*.*")],
         )
@@ -1721,6 +1795,7 @@ class OphiuchusApp(tk.Tk):
     def _pick_vesta_exe(self) -> None:
         path = filedialog.askopenfilename(
             title="选择 VESTA.exe",
+            initialdir=str(first_existing_directory(self.vesta_exe_var.get(), fallback=desktop_dir())),
             filetypes=[("VESTA executable", "VESTA.exe"), ("Executable", "*.exe"), ("All files", "*.*")],
         )
         if path:
@@ -1729,20 +1804,28 @@ class OphiuchusApp(tk.Tk):
     def _pick_rietan_exe(self) -> None:
         path = filedialog.askopenfilename(
             title="选择 RIETAN.exe",
+            initialdir=str(first_existing_directory(self.rietan_exe_var.get(), fallback=desktop_dir())),
             filetypes=[("RIETAN executable", "RIETAN.exe"), ("Executable", "*.exe"), ("All files", "*.*")],
         )
         if path:
             self.rietan_exe_var.set(path)
 
     def _pick_vesta_reference_dir(self) -> None:
-        path = filedialog.askdirectory(title="选择 VESTA 参考峰目录")
+        path = filedialog.askdirectory(
+            title="选择 VESTA 参考峰目录",
+            initialdir=str(
+                first_existing_directory(self.vesta_reference_dir_var.get(), fallback=default_xrd_dir())
+            ),
+        )
         if path:
             self.vesta_reference_dir_var.set(path)
 
     def _pick_formula_vesta_reference(self) -> None:
         path = filedialog.askopenfilename(
             title="选择该公式的标准 VESTA 参考文件",
-            initialdir=self.vesta_reference_dir_var.get() or str(Path.home() / "OneDrive" / "Desktop" / "XRD"),
+            initialdir=str(
+                first_existing_directory(self.vesta_reference_dir_var.get(), fallback=default_xrd_dir())
+            ),
             filetypes=[("VESTA / peak files", "*.int *.csv *.txt *.dat *.xy"), ("All files", "*.*")],
         )
         if path:
@@ -2730,7 +2813,9 @@ class OphiuchusApp(tk.Tk):
             return
         default_name = f"{Path(self.xrd_var.get()).stem or 'ophi_xrd'}_dashboard_xrd.png"
         target = filedialog.asksaveasfilename(
-            initialdir=str(Path(self.out_var.get()) if self.out_var.get().strip() else project_root() / "results"),
+            initialdir=str(
+                first_existing_directory(self.out_var.get(), fallback=project_root() / "results")
+            ),
             initialfile=default_name,
             defaultextension=".png",
             filetypes=[("PNG image", "*.png"), ("All files", "*.*")],
