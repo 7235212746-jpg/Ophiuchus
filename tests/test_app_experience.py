@@ -54,6 +54,80 @@ class AppExperienceTests(unittest.TestCase):
         self.assertGreaterEqual(height, 620)
         self.assertRegex(geometry, r"^\d+x\d+\+\d+\+\d+$")
 
+    def test_main_workbench_keeps_sidebar_compact_and_result_tabs_visible(self):
+        app = OphiuchusApp()
+        try:
+            app.geometry("1240x673+0+0")
+            app.update()
+
+            self.assertLessEqual(app.sidebar.winfo_width(), 155)
+            self.assertGreaterEqual(app.tabs.winfo_width(), 500)
+            visible_tabs = set()
+            for x in range(0, app.tabs.winfo_width(), 4):
+                try:
+                    visible_tabs.add(app.tabs.index(f"@{x},10"))
+                except tk.TclError:
+                    pass
+            self.assertIn(len(app.tabs.tabs()) - 1, visible_tabs)
+        finally:
+            app.destroy()
+
+    def test_advanced_inputs_are_collapsed_until_requested(self):
+        app = OphiuchusApp()
+        try:
+            app.update()
+            self.assertFalse(app.advanced_inputs.winfo_ismapped())
+            self.assertEqual(app.advanced_toggle_var.get(), "显示数据与保存设置")
+
+            app.advanced_toggle_button.invoke()
+            app.update()
+
+            self.assertTrue(app.advanced_inputs.winfo_ismapped())
+            self.assertEqual(app.advanced_toggle_var.get(), "收起数据与保存设置")
+        finally:
+            app.destroy()
+
+    def test_core_inputs_fit_without_scrolling_at_default_height(self):
+        app = OphiuchusApp()
+        try:
+            app.geometry("1240x673+0+0")
+            app.update()
+            scrollregion = [int(float(value)) for value in app.workflow_canvas.cget("scrollregion").split()]
+            content_height = scrollregion[3] - scrollregion[1]
+
+            self.assertLessEqual(content_height, app.workflow_canvas.winfo_height())
+        finally:
+            app.destroy()
+
+    def test_target_phase_toolbar_keeps_both_commands_visible(self):
+        app = OphiuchusApp()
+        try:
+            app.geometry("1240x673+0+0")
+            app.update()
+            row = app.target_phase_combo.master
+
+            self.assertGreaterEqual(app.refresh_target_button.winfo_width(), 50)
+            self.assertGreaterEqual(app.import_target_button.winfo_width(), 65)
+            self.assertLessEqual(
+                app.import_target_button.winfo_x() + app.import_target_button.winfo_width(),
+                row.winfo_width(),
+            )
+        finally:
+            app.destroy()
+
+    def test_main_commands_are_grouped_by_workflow_stage(self):
+        app = OphiuchusApp()
+        try:
+            self.assertEqual(int(app.run_button.grid_info()["row"]), 0)
+            self.assertEqual(int(app.library_run_button.grid_info()["row"]), 0)
+            self.assertIs(app.database_button.master, app.setup_actions)
+            self.assertIs(app.vesta_button.master, app.setup_actions)
+            self.assertIs(app.save_analysis_button.master, app.result_actions)
+            self.assertIs(app.phase_stripping_button.master, app.result_actions)
+            self.assertIs(app.refinement_button.master, app.result_actions)
+        finally:
+            app.destroy()
+
     def test_app_destroy_cancels_pending_result_poll(self):
         app = OphiuchusApp()
         callback_id = app._poll_after_id
@@ -177,7 +251,7 @@ class AppExperienceTests(unittest.TestCase):
 
     def test_workbench_sections_match_phase2_navigation(self):
         labels = [section["label"] for section in workbench_sections()]
-        self.assertEqual(labels, ["Projects", "Samples", "Library", "XRD Analysis", "Phase Evidence", "Settings"])
+        self.assertEqual(labels, ["项目总览", "样品与输入", "结构库", "XRD 分析", "物相证据", "设置"])
 
     def test_theme_supports_light_chinese_ui(self):
         self.assertEqual(COLORS["background"], "#eef3f8")
@@ -271,7 +345,7 @@ class AppExperienceTests(unittest.TestCase):
             self.assertTrue(hasattr(app, "candidate_phase_text"))
             self.assertTrue(hasattr(app, "used_structures_text"))
             app._select_section("library")
-            self.assertEqual(app.status_var.get(), "当前工作区：Library")
+            self.assertEqual(app.status_var.get(), "当前工作区：结构库")
         finally:
             app.destroy()
 
@@ -343,7 +417,7 @@ class AppExperienceTests(unittest.TestCase):
             self.assertTrue(first.winfo_viewable())
             self.assertIsNone(app.grab_current())
             self.assertNotEqual(first.geometry().split("+", 1)[1], "0+0")
-            self.assertEqual(str(app.vesta_button.cget("text")), "VESTA / RIETAN 设置")
+            self.assertEqual(str(app.vesta_button.cget("text")), "VESTA")
             self.assertEqual(first.title(), "VESTA / RIETAN 设置")
             self.assertTrue(bool(first.attributes("-topmost")))
 

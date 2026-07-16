@@ -47,12 +47,12 @@ CANDIDATE_EXTENSIONS = {".cif", ".int", ".txt", ".xy", ".dat", ".csv"}
 
 def workbench_sections() -> list[dict[str, str]]:
     return [
-        {"key": "projects", "label": "Projects"},
-        {"key": "samples", "label": "Samples"},
-        {"key": "library", "label": "Library"},
-        {"key": "xrd", "label": "XRD Analysis"},
-        {"key": "phase", "label": "Phase Evidence"},
-        {"key": "settings", "label": "Settings"},
+        {"key": "projects", "label": "项目总览"},
+        {"key": "samples", "label": "样品与输入"},
+        {"key": "library", "label": "结构库"},
+        {"key": "xrd", "label": "XRD 分析"},
+        {"key": "phase", "label": "物相证据"},
+        {"key": "settings", "label": "设置"},
     ]
 
 
@@ -697,7 +697,7 @@ class OphiuchusApp(tk.Tk):
         style.map("Primary.TButton", background=[("active", COLORS["accent_hover"]), ("disabled", COLORS["border"])])
         style.configure("TEntry", fieldbackground=COLORS["input"], foreground=COLORS["text"], insertcolor=COLORS["text"], bordercolor=COLORS["border"], lightcolor=COLORS["border_soft"], darkcolor=COLORS["border"])
         style.configure("TNotebook", background=COLORS["glass"], borderwidth=0)
-        style.configure("TNotebook.Tab", background=COLORS["panel_alt"], foreground=COLORS["muted"], padding=(12, 7), font=FONTS["button"])
+        style.configure("TNotebook.Tab", background=COLORS["panel_alt"], foreground=COLORS["muted"], padding=(8, 6), font=FONTS["button"])
         style.map("TNotebook.Tab", background=[("selected", COLORS["accent_soft"])], foreground=[("selected", COLORS["text"])])
         style.configure("Treeview", background=COLORS["panel"], fieldbackground=COLORS["panel"], foreground=COLORS["text"], rowheight=28, font=FONTS["body"])
         style.configure("Treeview.Heading", background=COLORS["panel_alt"], foreground=COLORS["muted"], font=FONTS["button"])
@@ -705,16 +705,16 @@ class OphiuchusApp(tk.Tk):
         style.map("Panel.TCheckbutton", background=[("active", COLORS["glass"])])
 
     def _build_layout(self) -> None:
-        root = ttk.Frame(self, style="Shell.TFrame", padding=24)
+        root = ttk.Frame(self, style="Shell.TFrame", padding=14)
         root.pack(fill="both", expand=True)
 
         self._build_header(root)
 
         body = ttk.Frame(root, style="Shell.TFrame")
-        body.pack(fill="both", expand=True, pady=(18, 0))
-        body.columnconfigure(0, weight=0, minsize=170)
-        body.columnconfigure(1, weight=1, minsize=480)
-        body.columnconfigure(2, weight=1, minsize=520)
+        body.pack(fill="both", expand=True, pady=(10, 0))
+        body.columnconfigure(0, weight=0, minsize=130)
+        body.columnconfigure(1, weight=9, minsize=390)
+        body.columnconfigure(2, weight=11, minsize=500)
         body.rowconfigure(0, weight=1)
 
         self._build_sidebar(body)
@@ -722,10 +722,11 @@ class OphiuchusApp(tk.Tk):
         self._build_result_panel(body)
 
     def _build_sidebar(self, parent: ttk.Frame) -> None:
-        self.sidebar = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
-        ttk.Label(self.sidebar, text="Workspace", style="Section.TLabel").pack(anchor="w")
-        ttk.Label(self.sidebar, text="Local evidence workbench", style="PanelMuted.TLabel").pack(anchor="w", pady=(2, 14))
+        self.sidebar = ttk.Frame(parent, style="Panel.TFrame", padding=10, width=140)
+        self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        self.sidebar.grid_propagate(False)
+        ttk.Label(self.sidebar, text="工作区", style="Section.TLabel").pack(anchor="w")
+        ttk.Label(self.sidebar, text="科研工作台", style="PanelMuted.TLabel").pack(anchor="w", pady=(2, 10))
         self.nav_buttons: dict[str, ttk.Button] = {}
         for section in workbench_sections():
             button = ttk.Button(
@@ -741,9 +742,9 @@ class OphiuchusApp(tk.Tk):
         self.help_button.pack(fill="x", pady=(0, 10))
         ttk.Label(
             footer,
-            text="Screening evidence only. No fake wt%.",
+            text="结果用于候选筛选，不替代人工定相。",
             style="PanelMuted.TLabel",
-            wraplength=130,
+            wraplength=112,
         ).pack(anchor="w")
 
     def _open_help_dialog(self) -> None:
@@ -833,21 +834,21 @@ class OphiuchusApp(tk.Tk):
         ttk.Label(root, text="Ophiuchus", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             root,
-            text="你的本地材料科研流程助手。先从 XRD 候选相筛选开始，帮你判断哪些相值得查、哪些强峰缺失、哪些峰仍未解释。",
+            text="本地材料科研工作台 · XRD 候选筛选与物相证据",
             style="Muted.TLabel",
-        ).pack(anchor="w", pady=(3, 0))
+        ).pack(anchor="w", pady=(1, 0))
 
     def _build_workflow_panel(self, parent: ttk.Frame) -> None:
-        self.workspace_panel = ttk.Frame(parent, style="Panel.TFrame", padding=18)
+        self.workspace_panel = ttk.Frame(parent, style="Panel.TFrame", padding=14)
         panel = self.workspace_panel
-        panel.grid(row=0, column=1, sticky="nsew", padx=(0, 16))
+        panel.grid(row=0, column=1, sticky="nsew", padx=(0, 10))
 
         ttk.Label(panel, text="本次任务", style="Section.TLabel").pack(anchor="w")
         ttk.Label(
             panel,
-            text="按顺序选择实验谱、候选来源和元素范围。Ophi 会生成候选排序和透明报告。",
+            text="选择实验谱、候选来源和元素范围。",
             style="PanelMuted.TLabel",
-        ).pack(anchor="w", pady=(4, 16))
+        ).pack(anchor="w", pady=(2, 10))
 
         self.xrd_var = tk.StringVar()
         self.dir_var = tk.StringVar(value=str(default_candidate_dir()))
@@ -873,48 +874,43 @@ class OphiuchusApp(tk.Tk):
         self.current_plot_path: str | None = None
         self.plot_image = None
 
-        action_row = ttk.Frame(panel, style="Panel.TFrame")
-        action_row.pack(fill="x", pady=(0, 14))
-        for column in range(3):
-            action_row.columnconfigure(column, weight=1, uniform="workflow_actions")
-        self.run_button = ttk.Button(action_row, text="开始候选筛选", style="Primary.TButton", command=self._run)
-        self.run_button.grid(row=0, column=0, sticky="ew", padx=(0, 5), pady=(0, 6))
-        self.database_button = ttk.Button(action_row, text="连接 API / 数据库", command=self._open_database_dialog)
-        self.database_button.grid(row=0, column=1, sticky="ew", padx=5, pady=(0, 6))
-        self.vesta_button = ttk.Button(action_row, text="VESTA / RIETAN 设置", command=self._open_vesta_dialog)
-        self.vesta_button.grid(row=0, column=2, sticky="ew", padx=5, pady=(0, 6))
-        self.cache_button = ttk.Button(action_row, text="构建/更新缓存", command=self._build_cache)
-        self.cache_button.grid(row=1, column=0, sticky="ew", padx=(0, 5), pady=(0, 6))
-        self.library_button = ttk.Button(action_row, text="导入结构库", command=self._import_library)
-        self.library_button.grid(row=1, column=1, sticky="ew", padx=5, pady=(0, 6))
-        self.library_run_button = ttk.Button(action_row, text="结构库分析", command=self._run_library)
-        self.library_run_button.grid(row=1, column=2, sticky="ew", padx=(5, 0), pady=(0, 6))
-        self.save_analysis_button = ttk.Button(action_row, text="保存本次分析", command=self._save_current_analysis)
-        self.save_analysis_button.grid(row=2, column=0, sticky="ew", padx=(0, 5), pady=(0, 6))
-        self.phase_stripping_button = ttk.Button(
-            action_row,
-            text="手动物相剥离 / 残差谱分析",
-            command=self._open_phase_stripping,
+        self.analysis_actions = ttk.Frame(panel, style="Panel.TFrame")
+        self.analysis_actions.pack(fill="x", pady=(0, 6))
+        for column in range(2):
+            self.analysis_actions.columnconfigure(column, weight=1, uniform="analysis_actions")
+        self.run_button = ttk.Button(
+            self.analysis_actions,
+            text="本地候选分析",
+            style="Primary.TButton",
+            command=self._run,
         )
-        self.phase_stripping_button.grid(row=2, column=1, sticky="ew", padx=5, pady=(0, 6))
-        self.refinement_button = ttk.Button(
-            action_row,
-            text="RIETAN 受约束精修",
-            command=self._open_refinement,
+        self.run_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        self.library_run_button = ttk.Button(
+            self.analysis_actions,
+            text="结构库分析",
+            style="Primary.TButton",
+            command=self._run_library,
         )
-        self.refinement_button.grid(row=2, column=2, sticky="ew", padx=(5, 0), pady=(0, 6))
-        self.save_analysis_button.state(["disabled"])
-        self.phase_stripping_button.state(["disabled"])
-        self.refinement_button.state(["disabled"])
-        ttk.Button(action_row, text="打开保存位置", command=self._open_output).grid(
-            row=3, column=0, columnspan=3, sticky="ew"
-        )
+        self.library_run_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
+        self.setup_actions = ttk.Frame(panel, style="Panel.TFrame")
+        self.setup_actions.pack(fill="x", pady=(0, 8))
+        for column in range(4):
+            self.setup_actions.columnconfigure(column, weight=1, uniform="setup_actions")
+        self.database_button = ttk.Button(self.setup_actions, text="数据库", command=self._open_database_dialog)
+        self.database_button.grid(row=0, column=0, sticky="ew", padx=(0, 3))
+        self.library_button = ttk.Button(self.setup_actions, text="导入 CIF", command=self._import_library)
+        self.library_button.grid(row=0, column=1, sticky="ew", padx=3)
+        self.cache_button = ttk.Button(self.setup_actions, text="更新缓存", command=self._build_cache)
+        self.cache_button.grid(row=0, column=2, sticky="ew", padx=3)
+        self.vesta_button = ttk.Button(self.setup_actions, text="VESTA", command=self._open_vesta_dialog)
+        self.vesta_button.grid(row=0, column=3, sticky="ew", padx=(3, 0))
 
         trust_row = ttk.Frame(panel, style="Panel.TFrame")
-        trust_row.pack(fill="x", pady=(0, 12))
+        trust_row.pack(fill="x", pady=(0, 8))
         ttk.Checkbutton(
             trust_row,
-            text="Scientific Safe Mode（CIF 每次重新计算）",
+            text="严格模拟（CIF 每次重新计算）",
             variable=self.scientific_safe_mode_var,
             style="Panel.TCheckbutton",
         ).pack(side="left")
@@ -924,6 +920,8 @@ class OphiuchusApp(tk.Tk):
             variable=self.force_recompute_var,
             style="Panel.TCheckbutton",
         ).pack(side="left", padx=(16, 0))
+
+        self._target_phase_step(panel)
 
         scroll_shell = ttk.Frame(panel, style="Panel.TFrame")
         scroll_shell.pack(fill="both", expand=True)
@@ -943,14 +941,35 @@ class OphiuchusApp(tk.Tk):
         self._file_step(steps, "1", "选择实验 XRD", "支持 Rigaku .asc 和常见两列文本。", self.xrd_var, self._pick_xrd)
         self._file_step(steps, "2", "选择候选结构/模拟峰文件夹", "建议先用桌面的 结构 文件夹，也可以选含 .int/.csv 的实验目录。", self.dir_var, self._pick_dir)
         self._element_step(steps)
-        self._entry_step(steps, "", "可能杂质/替代元素", "额外元素", self.extra_var)
-        self._file_step(steps, "4", "本地候选缓存", "可先构建缓存；正式筛选会自动复用已模拟的峰表。", self.cache_var, self._pick_cache)
-        self._file_step(steps, "5", "本地结构库", "Phase 2 结构库数据库；导入本地 CIF 后可构建库级 XRD 缓存。", self.library_var, self._pick_library)
-        self._target_phase_step(steps)
-        self._harvest_step(steps)
-        self._file_step(
+        self.advanced_toggle_var = tk.StringVar(value="显示数据与保存设置")
+        self.advanced_toggle_button = ttk.Button(
             steps,
-            "8",
+            textvariable=self.advanced_toggle_var,
+            command=self._toggle_advanced_inputs,
+        )
+        self.advanced_toggle_button.pack(fill="x", pady=(6, 2))
+        self.advanced_inputs = ttk.Frame(steps, style="Panel.TFrame")
+        self._entry_step(self.advanced_inputs, "", "可能杂质/替代元素", "额外元素", self.extra_var)
+        self._file_step(
+            self.advanced_inputs,
+            "",
+            "本地候选缓存",
+            "正式筛选会自动复用已模拟的峰表。",
+            self.cache_var,
+            self._pick_cache,
+        )
+        self._file_step(
+            self.advanced_inputs,
+            "",
+            "本地结构库",
+            "导入本地 CIF 后可构建库级 XRD 缓存。",
+            self.library_var,
+            self._pick_library,
+        )
+        self._harvest_step(self.advanced_inputs)
+        self._file_step(
+            self.advanced_inputs,
+            "",
             "选择默认保存位置",
             "分析默认只保留一个临时会话；点击“保存本次分析”后才会复制到这里。",
             self.out_var,
@@ -959,6 +978,16 @@ class OphiuchusApp(tk.Tk):
 
     def _sync_workflow_scrollregion(self, _event=None) -> None:
         self.workflow_canvas.configure(scrollregion=self.workflow_canvas.bbox("all"))
+
+    def _toggle_advanced_inputs(self) -> None:
+        if self.advanced_inputs.winfo_manager():
+            self.advanced_inputs.pack_forget()
+            self.advanced_toggle_var.set("显示数据与保存设置")
+        else:
+            self.advanced_inputs.pack(fill="x", pady=(2, 0))
+            self.advanced_toggle_var.set("收起数据与保存设置")
+        self.update_idletasks()
+        self._sync_workflow_scrollregion()
 
     def _sync_workflow_width(self, event) -> None:
         self.workflow_canvas.itemconfigure(self.workflow_window_id, width=event.width)
@@ -1049,11 +1078,10 @@ class OphiuchusApp(tk.Tk):
             self.destroy()
 
     def _file_step(self, parent: ttk.Frame, number: str, title: str, hint: str, var: tk.StringVar, command) -> None:
-        box = ttk.Frame(parent, style="Subtle.TFrame", padding=10)
-        box.pack(fill="x", pady=5)
+        box = ttk.Frame(parent, style="Subtle.TFrame", padding=6)
+        box.pack(fill="x", pady=2)
         label = f"{number}. {title}" if number else title
-        ttk.Label(box, text=label, style="Subtle.TLabel").pack(anchor="w")
-        ttk.Label(box, text=hint, style="Subtle.TLabel").pack(anchor="w", pady=(2, 5))
+        ttk.Label(box, text=label, style="Subtle.TLabel").pack(anchor="w", pady=(0, 4))
         row = ttk.Frame(box, style="Subtle.TFrame")
         row.pack(fill="x")
         entry = ttk.Entry(row, textvariable=var)
@@ -1061,18 +1089,16 @@ class OphiuchusApp(tk.Tk):
         ttk.Button(row, text="选择", command=command).pack(side="left", padx=(8, 0))
 
     def _entry_step(self, parent: ttk.Frame, number: str, title: str, label: str, var: tk.StringVar) -> None:
-        box = ttk.Frame(parent, style="Subtle.TFrame", padding=10)
-        box.pack(fill="x", pady=5)
+        box = ttk.Frame(parent, style="Subtle.TFrame", padding=6)
+        box.pack(fill="x", pady=2)
         heading = f"{number}. {title}" if number else title
-        ttk.Label(box, text=heading, style="Subtle.TLabel").pack(anchor="w")
-        ttk.Label(box, text=label, style="Subtle.TLabel").pack(anchor="w", pady=(2, 5))
+        ttk.Label(box, text=heading, style="Subtle.TLabel").pack(anchor="w", pady=(0, 4))
         ttk.Entry(box, textvariable=var).pack(fill="x")
 
     def _element_step(self, parent: ttk.Frame) -> None:
-        box = ttk.Frame(parent, style="Subtle.TFrame", padding=10)
-        box.pack(fill="x", pady=5)
-        ttk.Label(box, text="3. 确认元素范围", style="Subtle.TLabel").pack(anchor="w")
-        ttk.Label(box, text="主元素（可手动输入，也可从周期表多选）", style="Subtle.TLabel").pack(anchor="w", pady=(2, 5))
+        box = ttk.Frame(parent, style="Subtle.TFrame", padding=6)
+        box.pack(fill="x", pady=2)
+        ttk.Label(box, text="3. 确认元素范围", style="Subtle.TLabel").pack(anchor="w", pady=(0, 4))
         row = ttk.Frame(box, style="Subtle.TFrame")
         row.pack(fill="x")
         ttk.Entry(row, textvariable=self.elements_var).pack(side="left", fill="x", expand=True)
@@ -1088,28 +1114,39 @@ class OphiuchusApp(tk.Tk):
         self.status_var.set("已更新主元素范围；请重新明确选择目标相。")
 
     def _target_phase_step(self, parent: ttk.Frame) -> None:
-        box = ttk.Frame(parent, style="Subtle.TFrame", padding=10)
-        box.pack(fill="x", pady=5)
-        ttk.Label(box, text="6. 指定目标相", style="Subtle.TLabel").pack(anchor="w")
-        ttk.Label(box, text="目标相由你指定；剩余候选只作为非目标杂质解释未覆盖峰。", style="Subtle.TLabel").pack(anchor="w", pady=(2, 5))
+        box = ttk.Frame(parent, style="Subtle.TFrame", padding=8)
+        box.pack(fill="x", pady=(0, 8))
+        row = ttk.Frame(box, style="Subtle.TFrame")
+        row.pack(fill="x")
+        ttk.Label(row, text="目标相", style="Subtle.TLabel").pack(side="left", padx=(0, 8))
         self.target_phase_combo = ttk.Combobox(
-            box,
+            row,
             textvariable=self.target_phase_var,
             values=(),
             state="readonly",
             height=10,
+            width=14,
         )
-        self.target_phase_combo.pack(fill="x")
-        row = ttk.Frame(box, style="Subtle.TFrame")
-        row.pack(fill="x", pady=(8, 0))
-        ttk.Button(row, text="刷新目标相", command=self._refresh_target_phase_options).pack(side="left", fill="x", expand=True)
-        self.import_target_button = ttk.Button(row, text="导入目标相 CIF", command=self._import_target_phase_cif)
-        self.import_target_button.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        self.target_phase_combo.pack(side="left", fill="x", expand=True)
+        self.refresh_target_button = ttk.Button(
+            row,
+            text="刷新",
+            width=4,
+            command=self._refresh_target_phase_options,
+        )
+        self.refresh_target_button.pack(side="left", padx=(6, 0))
+        self.import_target_button = ttk.Button(
+            row,
+            text="导入 CIF",
+            width=8,
+            command=self._import_target_phase_cif,
+        )
+        self.import_target_button.pack(side="left", padx=(6, 0))
 
     def _harvest_step(self, parent: ttk.Frame) -> None:
         box = ttk.Frame(parent, style="Subtle.TFrame", padding=10)
         box.pack(fill="x", pady=5)
-        ttk.Label(box, text="7. 连接结构数据库并采集", style="Subtle.TLabel").pack(anchor="w")
+        ttk.Label(box, text="连接结构数据库并采集", style="Subtle.TLabel").pack(anchor="w")
         ttk.Label(box, text="当前启用 Materials Project；COD/AFLOW/OQMD/NOMAD 入口先保留，后续逐步接入。", style="Subtle.TLabel").pack(anchor="w", pady=(2, 5))
         ttk.Combobox(
             box,
@@ -1118,29 +1155,68 @@ class OphiuchusApp(tk.Tk):
             state="readonly",
         ).pack(fill="x", pady=(0, 6))
         ttk.Entry(box, textvariable=self.mp_api_key_var, show="*").pack(fill="x")
-        row = ttk.Frame(box, style="Subtle.TFrame")
-        row.pack(fill="x", pady=(8, 0))
-        ttk.Combobox(row, textvariable=self.harvest_mode_var, values=("conservative", "normal", "broad"), width=14, state="readonly").pack(side="left")
-        ttk.Button(row, text="保存 API", command=self._save_database_api).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="连接测试", command=self._test_database_api).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="预览采集", command=self._preview_mp_harvest).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="按当前元素采集", command=self._harvest_from_selected_database).pack(side="left", padx=(8, 0))
+        ttk.Combobox(
+            box,
+            textvariable=self.harvest_mode_var,
+            values=("conservative", "normal", "broad"),
+            state="readonly",
+        ).pack(fill="x", pady=(6, 0))
+        self.harvest_actions = ttk.Frame(box, style="Subtle.TFrame")
+        self.harvest_actions.pack(fill="x", pady=(8, 0))
+        for column in range(2):
+            self.harvest_actions.columnconfigure(column, weight=1, uniform="harvest_actions")
+        ttk.Button(self.harvest_actions, text="保存 API", command=self._save_database_api).grid(row=0, column=0, sticky="ew", padx=(0, 3))
+        ttk.Button(self.harvest_actions, text="连接测试", command=self._test_database_api).grid(row=0, column=1, sticky="ew", padx=(3, 0))
+        ttk.Button(self.harvest_actions, text="预览采集", command=self._preview_mp_harvest).grid(row=1, column=0, sticky="ew", padx=(0, 3), pady=(6, 0))
+        ttk.Button(self.harvest_actions, text="按当前元素采集", command=self._harvest_from_selected_database).grid(row=1, column=1, sticky="ew", padx=(3, 0), pady=(6, 0))
 
     def _build_result_panel(self, parent: ttk.Frame) -> None:
-        panel = ttk.Frame(parent, style="Panel.TFrame", padding=18)
+        panel = ttk.Frame(parent, style="Panel.TFrame", padding=14)
         panel.grid(row=0, column=2, sticky="nsew")
         panel.rowconfigure(3, weight=1)
         panel.columnconfigure(0, weight=1)
 
         ttk.Label(panel, text="分析状态与结果", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        self.status_var = tk.StringVar(value="等待输入：请选择实验谱和候选来源。")
         ttk.Label(
             panel,
-            text="这里会显示 Ophi 对候选相的判断。注意：这是候选筛选，不是确定性定相。",
-            style="PanelMuted.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(4, 14))
+            textvariable=self.status_var,
+            style="Step.TLabel",
+            wraplength=560,
+            justify="left",
+        ).grid(row=1, column=0, sticky="ew", pady=(3, 8))
 
-        self.status_var = tk.StringVar(value="等待输入：请选择实验谱和候选来源。")
-        ttk.Label(panel, textvariable=self.status_var, style="Step.TLabel").grid(row=2, column=0, sticky="w", pady=(0, 10))
+        self.result_actions = ttk.Frame(panel, style="Panel.TFrame")
+        self.result_actions.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        for column in range(4):
+            self.result_actions.columnconfigure(column, weight=1, uniform="result_actions")
+        self.save_analysis_button = ttk.Button(
+            self.result_actions,
+            text="保存分析",
+            command=self._save_current_analysis,
+        )
+        self.save_analysis_button.grid(row=0, column=0, sticky="ew", padx=(0, 3))
+        self.phase_stripping_button = ttk.Button(
+            self.result_actions,
+            text="物相剥离",
+            command=self._open_phase_stripping,
+        )
+        self.phase_stripping_button.grid(row=0, column=1, sticky="ew", padx=3)
+        self.refinement_button = ttk.Button(
+            self.result_actions,
+            text="RIETAN 精修",
+            command=self._open_refinement,
+        )
+        self.refinement_button.grid(row=0, column=2, sticky="ew", padx=3)
+        self.open_output_button = ttk.Button(
+            self.result_actions,
+            text="保存位置",
+            command=self._open_output,
+        )
+        self.open_output_button.grid(row=0, column=3, sticky="ew", padx=(3, 0))
+        self.save_analysis_button.state(["disabled"])
+        self.phase_stripping_button.state(["disabled"])
+        self.refinement_button.state(["disabled"])
 
         self.tabs = ttk.Notebook(panel)
         self.tabs.grid(row=3, column=0, sticky="nsew")
@@ -1149,7 +1225,7 @@ class OphiuchusApp(tk.Tk):
         self._build_library_tab(self.tabs)
         self._build_candidate_phase_tab(self.tabs)
         self._build_peak_inspector_tab(self.tabs)
-        self.used_structures_text = self._make_text_tab(self.tabs, "已用结构")
+        self.used_structures_text = self._make_text_tab(self.tabs, "结构记录")
         self.report_paths = self._make_text_tab(self.tabs, "导出")
         self.log_text = self._make_text_tab(self.tabs, "日志")
         self._write_summary(
@@ -1159,7 +1235,7 @@ class OphiuchusApp(tk.Tk):
             "2. 选择候选结构或模拟峰文件夹。\n"
             "3. 确认主元素和可能杂质元素。\n"
             "4. 可先点击“构建/更新缓存”。\n"
-            "5. 点击“开始候选筛选”。\n\n"
+            "5. 点击“本地候选分析”或“结构库分析”。\n\n"
             "输出会包括候选相排序、相对贡献 proxy、XRD 图片、缺失强峰、未解释峰和报告文件路径。"
         )
         self._write_text_widget(self.candidate_phase_text, "完成一次结构库分析后，这里会显示候选相排名、置信标签和评分分解。")

@@ -25,7 +25,7 @@ FONTS = {
     "body": (FONT_STACK[0], 10),
     "body_zh": (FONT_STACK[1], 10),
     "small": (FONT_STACK[0], 9),
-    "title": (FONT_STACK[0], 24, "bold"),
+    "title": (FONT_STACK[0], 20, "bold"),
     "section": (FONT_STACK[0], 12, "bold"),
     "button": (FONT_STACK[0], 10, "bold"),
 }
