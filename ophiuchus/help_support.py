@@ -5,13 +5,15 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import quote
 
+from .runtime import resource_root
+
 
 CONTACT_EMAIL = "wanyc@issp.u-tokyo.ac.jp"
 MANUAL_FILENAME = "Ophiuchus_操作手册.md"
 
 
 def manual_path(root: Path | None = None) -> Path:
-    project = root or Path(__file__).resolve().parents[1]
+    project = root or resource_root()
     return project / "docs" / MANUAL_FILENAME
 
 

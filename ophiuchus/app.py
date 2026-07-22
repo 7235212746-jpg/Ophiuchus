@@ -33,6 +33,7 @@ from .paths import desktop_dir, first_existing_directory
 from .phase_stripping.window import PhaseStrippingWindow, open_or_raise_phase_stripping_window
 from .refinement.window import RefinementWindow, open_or_raise_refinement_window
 from .refinement.oxide_candidates import supplement_common_oxide_library
+from .runtime import resource_root, user_data_root
 from .session_storage import TransientAnalysisStore
 from .theme import COLORS, FONTS, SPACING
 from .xrd.cache import CandidateCache, build_candidate_cache
@@ -63,7 +64,7 @@ def workbench_sections() -> list[dict[str, str]]:
 
 
 def project_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return resource_root()
 
 
 def default_candidate_dir(root: Path | None = None) -> Path:
@@ -96,22 +97,22 @@ def initial_window_geometry(screen_width: int, screen_height: int) -> str:
 
 
 def default_cache_path(root: Path | None = None) -> Path:
-    base = root or project_root()
+    base = root or user_data_root()
     return base / "data" / "ophi_xrd_cache.sqlite"
 
 
 def default_library_path(root: Path | None = None) -> Path:
-    base = root or project_root()
+    base = root or user_data_root()
     return base / "data" / "ophi_library.sqlite"
 
 
 def default_env_path(root: Path | None = None) -> Path:
-    base = root or project_root()
+    base = root or user_data_root()
     return base / ".env"
 
 
 def default_app_state_path(root: Path | None = None) -> Path:
-    base = root or project_root()
+    base = root or user_data_root()
     return base / "data" / "ophi_app_state.json"
 
 
@@ -156,7 +157,7 @@ def save_app_state(state_path: str | Path, state: dict[str, object]) -> None:
 
 def repair_app_state_paths(state: dict[str, str], root: Path | None = None) -> dict[str, str]:
     """Repair paths saved before the portable project folder was moved."""
-    base = root or project_root()
+    base = root or user_data_root()
     repaired = dict(state)
     xrd_file = repaired.get("xrd_file", "").strip()
     if xrd_file and not Path(xrd_file).is_file():
@@ -615,7 +616,7 @@ def resolve_target_phase_selection(rows: list[dict[str, str]], current_label: st
 
 
 def build_output_dir(xrd_file: str | Path, root: Path | None = None) -> Path:
-    base = root or project_root()
+    base = root or user_data_root()
     stem = Path(xrd_file).stem if str(xrd_file).strip() else "ophi_xrd"
     safe = re.sub(r"[^A-Za-z0-9\u4e00-\u9fff]+", "_", stem).strip("_") or "ophi_xrd"
     return base / "results" / safe
@@ -860,7 +861,7 @@ class OphiuchusApp(tk.Tk):
         self.dir_var = tk.StringVar(value=str(default_candidate_dir()))
         self.elements_var = tk.StringVar(value="Zr Fe Ge")
         self.extra_var = tk.StringVar(value="O C Si Al Cu Sn Hf Sc I")
-        self.out_var = tk.StringVar(value=str(project_root() / "results"))
+        self.out_var = tk.StringVar(value=str(user_data_root() / "results"))
         self.cache_var = tk.StringVar(value=str(default_cache_path()))
         self.library_var = tk.StringVar(value=str(default_library_path()))
         self.target_phase_var = tk.StringVar()
@@ -1463,7 +1464,7 @@ class OphiuchusApp(tk.Tk):
 
     def _pick_out(self) -> None:
         path = filedialog.askdirectory(
-            initialdir=str(first_existing_directory(self.out_var.get(), fallback=project_root() / "results"))
+            initialdir=str(first_existing_directory(self.out_var.get(), fallback=user_data_root() / "results"))
         )
         if path:
             self.out_var.set(path)
@@ -2829,9 +2830,9 @@ class OphiuchusApp(tk.Tk):
         if self.current_analysis_result is None or not self.analysis_store.current_path.is_dir():
             messagebox.showwarning("没有可保存的分析", "请先完成一次候选筛选或结构库分析。")
             return
-        initial = Path(self.out_var.get()) if self.out_var.get().strip() else project_root() / "results"
+        initial = Path(self.out_var.get()) if self.out_var.get().strip() else user_data_root() / "results"
         if not initial.is_dir():
-            initial = initial.parent if initial.parent.is_dir() else project_root() / "results"
+            initial = initial.parent if initial.parent.is_dir() else user_data_root() / "results"
         parent = filedialog.askdirectory(title="选择本次分析的保存位置", initialdir=str(initial), parent=self)
         if not parent:
             return
@@ -2944,7 +2945,7 @@ class OphiuchusApp(tk.Tk):
         default_name = f"{Path(self.xrd_var.get()).stem or 'ophi_xrd'}_dashboard_xrd.png"
         target = filedialog.asksaveasfilename(
             initialdir=str(
-                first_existing_directory(self.out_var.get(), fallback=project_root() / "results")
+                first_existing_directory(self.out_var.get(), fallback=user_data_root() / "results")
             ),
             initialfile=default_name,
             defaultextension=".png",
