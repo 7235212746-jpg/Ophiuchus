@@ -84,6 +84,23 @@ def discover_rietan_executable(configured: str | Path | None = None) -> Path | N
     return _first_existing_file(candidates)
 
 
+def discover_cif2ins_executable(
+    configured: str | Path | None = None,
+    *,
+    rietan_exe: str | Path | None = None,
+) -> Path | None:
+    local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    rietan = discover_rietan_executable(rietan_exe)
+    candidates = [
+        configured,
+        os.environ.get("OPHI_CIF2INS_EXE"),
+        None if rietan is None else rietan.parent / "cif2ins.exe",
+        local / "Ophiuchus" / "tools" / "rietan" / "cif2ins.exe",
+        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "RIETAN_VENUS" / "cif2ins.exe",
+    ]
+    return _first_existing_file(candidates)
+
+
 def _first_existing_file(candidates: Iterable[str | Path | None]) -> Path | None:
     for candidate in candidates:
         if not candidate:
