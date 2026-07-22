@@ -11,6 +11,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.worktrees/
 
 # Local research data, caches, state, and generated reports
 data/
