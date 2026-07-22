@@ -48,6 +48,7 @@ class ShareReadinessTests(unittest.TestCase):
             "run_tests.bat",
             "install_desktop_shortcut.bat",
             "build_launcher_exe.bat",
+            "build_portable.bat",
         ]:
             raw = (root / name).read_bytes()
             self.assertNotIn(b"\n", raw.replace(b"\r\n", b""), name)
@@ -66,6 +67,36 @@ class ShareReadinessTests(unittest.TestCase):
         executable = root / "Ophiuchus.exe"
         self.assertTrue(executable.is_file())
         self.assertEqual(executable.read_bytes()[:2], b"MZ")
+
+    def test_windows_launcher_prefers_self_contained_runtime_before_source_fallback(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "tools" / "OphiuchusLauncher.cs").read_text(encoding="utf-8")
+
+        portable = source.index(r'runtime\OphiuchusApp.exe')
+        source_fallback = source.index("start_ophiuchus.bat")
+        self.assertLess(portable, source_fallback)
+        self.assertIn("File.Exists(portableApp)", source)
+
+    def test_portable_builder_uses_pyinstaller_health_gate_and_explicit_release_files(self):
+        root = Path(__file__).resolve().parents[1]
+        builder = (root / "build_portable.ps1").read_text(encoding="utf-8")
+        spec = (root / "packaging" / "OphiuchusPortable.spec").read_text(encoding="utf-8")
+
+        self.assertIn("PyInstaller", builder)
+        self.assertIn("--health-check", builder)
+        self.assertIn("SHA256SUMS.txt", builder)
+        self.assertIn("$releaseFiles", builder)
+        self.assertNotIn('Copy-Item -Path (Join-Path $PSScriptRoot "*")', builder)
+        self.assertIn("collect_all", spec)
+        self.assertIn("copy_metadata", spec)
+        self.assertIn("Ophiuchus_操作手册.md", spec)
+
+    def test_gitignore_excludes_portable_build_outputs(self):
+        root = Path(__file__).resolve().parents[1]
+        ignored = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+        self.assertIn("build/portable/", ignored)
+        self.assertIn("dist/", ignored)
 
     def test_gitignore_excludes_local_research_data_and_internal_work_notes(self):
         root = Path(__file__).resolve().parents[1]

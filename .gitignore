@@ -12,6 +12,8 @@ __pycache__/
 .coverage
 htmlcov/
 .worktrees/
+build/portable/
+dist/
 
 # Local research data, caches, state, and generated reports
 data/
