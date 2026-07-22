@@ -1,4 +1,6 @@
 import tkinter as tk
+from pathlib import Path
+import tempfile
 import time
 import unittest
 from types import SimpleNamespace
@@ -15,6 +17,8 @@ from ophiuchus.refinement.conclusion import (
 )
 from ophiuchus.refinement.oxide_candidates import ControlledOxideLoadResult
 from ophiuchus.xrd.models import Candidate, Peak
+from ophiuchus.xrd.multiphase_models import MultiphaseRefinementResult, PhaseRefinementResult
+from ophiuchus.xrd.quantification import GateFinding, GateLevel, QuantificationAssessment
 from ophiuchus.xrd.refinement import RietanRefinementResult
 
 
@@ -67,6 +71,44 @@ class FakeBackend:
         )
 
 
+class FakeMultiphaseBackend:
+    available = True
+
+    def __init__(self):
+        self.calls = []
+
+    def refine(self, phases, x, intensity, settings):
+        self.calls.append(tuple(phases))
+        observed = np.asarray(intensity, dtype=float)
+        background = np.full_like(observed, 10.0)
+        calculated = observed.copy()
+        phase_results = tuple(
+            PhaseRefinementResult(
+                phase.phase_id,
+                phase.formula,
+                1.0,
+                1.0,
+                100.0,
+                50.0,
+                70.0 if index == 0 else 30.0 / max(1, len(phases) - 1),
+                reflection_two_theta_deg=(21.0 + index * 0.5, 22.0 + index * 0.5),
+            )
+            for index, phase in enumerate(phases)
+        )
+        return MultiphaseRefinementResult(
+            x,
+            observed,
+            calculated,
+            observed - calculated,
+            background,
+            phase_results,
+            8.0,
+            6.0,
+            1.2,
+            provenance={"zmv_max_difference_wt_percent": 0.1},
+        )
+
+
 class RefinementWindowTests(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()
@@ -105,6 +147,113 @@ class RefinementWindowTests(unittest.TestCase):
         pending = self.root.tk.call("after", "info")
         self.assertNotIn(callback_id, pending)
         self.assertNotIn(draw_id, pending)
+
+    def test_multiphase_mode_selects_target_and_up_to_three_cif_impurities(self):
+        context, _ = make_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidates = []
+            for index, formula in enumerate(("Main", "ImpA", "ImpB", "ImpC", "ImpD")):
+                cif = root / f"{formula}.cif"
+                cif.write_text(f"data_{formula}\n", encoding="ascii")
+                candidate = Candidate(str(index), formula, "library:local", str(cif), ["Fe"], str(index))
+                candidate.simulation_validation["status"] = "passed"
+                candidates.append(candidate)
+            window = RefinementWindow(
+                self.root,
+                context,
+                candidates,
+                backend=FakeBackend(),
+                multiphase_backend=FakeMultiphaseBackend(),
+            )
+            try:
+                window.workflow_var.set("多相实验定量")
+                window._on_workflow_changed()
+
+                selected = window.selected_phases()
+                self.assertEqual(selected[0].formula_pretty, "Main")
+                self.assertEqual([item.formula_pretty for item in selected[1:]], ["ImpA", "ImpB", "ImpC"])
+                self.assertTrue(all(Path(item.source_path).suffix.lower() == ".cif" for item in selected))
+                self.assertEqual(window.start_button.cget("text"), "运行三组联合精修")
+            finally:
+                window.destroy()
+
+    def test_failed_multiphase_gate_never_renders_numeric_weight_percent(self):
+        context, _ = make_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidates = []
+            for index, formula in enumerate(("Main", "Impurity")):
+                cif = root / f"{formula}.cif"
+                cif.write_text(f"data_{formula}\n", encoding="ascii")
+                candidate = Candidate(str(index), formula, "local", str(cif), ["Fe"], str(index))
+                candidate.simulation_validation["status"] = "passed"
+                candidates.append(candidate)
+            backend = FakeMultiphaseBackend()
+            window = RefinementWindow(
+                self.root,
+                context,
+                candidates,
+                backend=FakeBackend(),
+                multiphase_backend=backend,
+            )
+            try:
+                phases = window._build_multiphase_inputs(candidates)
+                result = backend.refine(phases, context.x, context.intensity, None)
+                assessment = QuantificationAssessment(
+                    GateLevel.FAIL,
+                    False,
+                    "不可定量",
+                    (GateFinding("test_failure", GateLevel.FAIL, "测试否决"),),
+                    {"0": (70.0, 70.0), "1": (30.0, 30.0)},
+                )
+
+                window._show_multiphase_result(result, assessment, (result, result, result))
+
+                self.assertIn("不可定量", window.metrics_var.get())
+                self.assertNotIn("70.000 wt%", window.metrics_var.get())
+                self.assertIn("测试否决", window.status_var.get())
+            finally:
+                window.destroy()
+
+    def test_passing_multiphase_gate_renders_experimental_weights_and_phase_ticks(self):
+        context, _ = make_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidates = []
+            for index, formula in enumerate(("Main", "Impurity")):
+                cif = root / f"{formula}.cif"
+                cif.write_text(f"data_{formula}\n", encoding="ascii")
+                candidate = Candidate(str(index), formula, "local", str(cif), ["Fe"], str(index))
+                candidate.simulation_validation["status"] = "passed"
+                candidates.append(candidate)
+            backend = FakeMultiphaseBackend()
+            window = RefinementWindow(
+                self.root,
+                context,
+                candidates,
+                backend=FakeBackend(),
+                multiphase_backend=backend,
+            )
+            try:
+                phases = window._build_multiphase_inputs(candidates)
+                result = backend.refine(phases, context.x, context.intensity, None)
+                assessment = QuantificationAssessment(
+                    GateLevel.PASS,
+                    True,
+                    "实验性定量",
+                    (),
+                    {"0": (69.8, 70.2), "1": (29.8, 30.2)},
+                )
+
+                window._show_multiphase_result(result, assessment, (result, result, result))
+
+                self.assertIn("实验性定量", window.metrics_var.get())
+                self.assertIn("Main: 70.000 wt%", window.parameter_var.get())
+                self.assertGreaterEqual(len(window.pattern_axis.collections), 2)
+                self.assertFalse(window.export_button.instate(["disabled"]))
+            finally:
+                window.destroy()
 
     def test_result_plot_contains_observed_calculated_background_difference_and_ticks(self):
         context, candidates = make_inputs()
