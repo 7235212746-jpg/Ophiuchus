@@ -112,6 +112,15 @@ def _lock_structure_parameters(text: str) -> str:
     )
 
 
+def _remove_locked_atomic_constraints(text: str) -> str:
+    atomic_parameter = r"(?:G|X|Y|Z|B(?:11|22|33|12|13|23)?)"
+    pattern = re.compile(
+        rf"(?mi)^[ \t]*(?=[^#\r\n]*A\([^,\r\n]+@\d+,\s*{atomic_parameter}\s*\))"
+        r"A\([^\r\n]*(?:\r?\n|$)"
+    )
+    return pattern.sub("", text)
+
+
 def patch_multiphase_refinement_input(
     text: str,
     phases: Iterable[PhaseRefinementInput],
@@ -153,6 +162,7 @@ def patch_multiphase_refinement_input(
         )
         patched = _replace_ids(patched, rf"ANISTR0@{phase_number}|ANISOBR12@{phase_number}", "00")
     patched = _lock_structure_parameters(patched)
+    patched = _remove_locked_atomic_constraints(patched)
     required = (
         r"(?m)^\s*NMODE\s*=\s*0(?::|\s*$)",
         r"(?m)^\s*NINT\s*=\s*1(?::|\s*$)",

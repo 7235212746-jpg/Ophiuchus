@@ -114,6 +114,23 @@ class MultiphaseRefinementTests(unittest.TestCase):
         self.assertIn("Zr1@1/Zr 1 0 0 0 0.5 00000", patched)
         self.assertIn("Sn1@2/Sn 1 0 0 0 0.5 00000", patched)
 
+    def test_patch_removes_stale_atomic_constraints_but_keeps_profile_constraints(self):
+        combined = COMBINED_INS + """
+A(O2@1,B)=A(O1@1,B); A(O3@1,B)=A(O1@1,B)
+A(O2@1,X)=A(O1@1,X)
+A(GAUSS01@2,1)=A(GAUSS01@1,1)
+"""
+
+        patched = patch_multiphase_refinement_input(
+            combined,
+            self.phases,
+            MultiphaseRefinementSettings(10.0, 90.0),
+        )
+
+        self.assertNotIn("A(O2@1,B)", patched)
+        self.assertNotIn("A(O2@1,X)", patched)
+        self.assertIn("A(GAUSS01@2,1)=A(GAUSS01@1,1)", patched)
+
     def test_parser_assigns_scales_native_weights_and_reflections_by_phase_order(self):
         result = parse_multiphase_output(
             GPD,

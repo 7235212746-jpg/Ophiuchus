@@ -448,6 +448,72 @@ class AppExperienceTests(unittest.TestCase):
         self.assertEqual(loaded["rietan_exe"], str(rietan))
         self.assertEqual(loaded["reference_dir"], str(refs))
 
+    def test_vesta_status_distinguishes_single_phase_and_multiphase_readiness(self):
+        app = OphiuchusApp()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                rietan = root / "RIETAN.exe"
+                template = root / "template_multiphase.ins"
+                rietan.write_text("", encoding="utf-8")
+                template.write_text("template", encoding="utf-8")
+                app.rietan_exe_var.set(str(rietan))
+                with mock.patch(
+                    "ophiuchus.app.discover_multiphase_template",
+                    return_value=template,
+                ):
+                    status = app._vesta_status_text()
+
+            self.assertIn("RIETAN-FP：已找到，可直接模拟", status)
+            self.assertIn("多相实验定量：已就绪", status)
+        finally:
+            app.destroy()
+
+    def test_install_multiphase_support_extracts_template_next_to_rietan(self):
+        app = OphiuchusApp()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                import zipfile
+
+                root = Path(tmp)
+                runtime = root / "runtime"
+                runtime.mkdir()
+                rietan = runtime / "RIETAN.exe"
+                rietan.write_text("", encoding="utf-8")
+                archive = root / "Windows_versions.zip"
+                template = """\
+! Elements @N
+'Cu' /
+# End Elements @N
+! Phase @N
+x
+# End Phase @N
+! Parameters @N
+x
+# End Parameters @N
+! Constraints @N
+x
+# End Constraints @N
+NPHASE@ = 1:
+"""
+                with zipfile.ZipFile(archive, "w") as bundle:
+                    bundle.writestr(
+                        "RIETAN_VENUS_examples/Cu3Fe4P6_combins/template.ins",
+                        template,
+                    )
+                app.rietan_exe_var.set(str(rietan))
+
+                with (
+                    mock.patch("ophiuchus.app.discover_rietan_archive", return_value=archive),
+                    mock.patch("ophiuchus.app.messagebox.showinfo") as info,
+                ):
+                    installed = app._install_multiphase_support()
+
+            self.assertEqual(installed, runtime / "template_multiphase.ins")
+            self.assertTrue(info.called)
+        finally:
+            app.destroy()
+
     def test_vesta_config_ignores_reference_directory_from_another_computer(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

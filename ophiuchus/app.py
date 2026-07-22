@@ -9,6 +9,7 @@ import subprocess
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -38,7 +39,12 @@ from .xrd.cache import CandidateCache, build_candidate_cache
 from .xrd.candidates import structure_hash
 from .xrd.pipeline import run_analysis
 from .xrd.vesta_reference import find_local_vesta_references
-from .xrd.rietan_backend import discover_rietan_executable
+from .xrd.rietan_backend import discover_multiphase_template, discover_rietan_executable
+from .xrd.rietan_assets import (
+    OFFICIAL_RIETAN_PAGE_URL,
+    discover_rietan_archive,
+    install_multiphase_template_from_archive,
+)
 from .xrd.refinement import RietanRefinementBackend
 
 
@@ -1783,7 +1789,7 @@ class OphiuchusApp(tk.Tk):
         dialog.title("VESTA / RIETAN 设置")
         dialog.configure(bg=COLORS["background"])
         dialog.transient(self)
-        width, height = 640, 530
+        width, height = 640, 580
         self.update_idletasks()
         x = max(0, self.winfo_rootx() + (self.winfo_width() - width) // 2)
         y = max(0, self.winfo_rooty() + (self.winfo_height() - height) // 2)
@@ -1816,6 +1822,19 @@ class OphiuchusApp(tk.Tk):
         ttk.Button(formula_row, text="选择参考", command=self._pick_formula_vesta_reference).pack(side="left", padx=(8, 0))
         status = ttk.Label(box, text=self._vesta_status_text(), style="PanelMuted.TLabel", wraplength=500)
         status.pack(anchor="w", pady=(10, 0))
+
+        support_actions = ttk.Frame(box, style="Panel.TFrame")
+        support_actions.pack(fill="x", pady=(12, 0))
+        ttk.Button(
+            support_actions,
+            text="安装多相支持",
+            command=lambda: self._install_multiphase_support(status),
+        ).pack(side="left")
+        ttk.Button(
+            support_actions,
+            text="RIETAN 官方页面",
+            command=lambda: webbrowser.open(OFFICIAL_RIETAN_PAGE_URL),
+        ).pack(side="left", padx=(8, 0))
 
         def save_and_refresh() -> None:
             saved = save_vesta_config(
@@ -1932,11 +1951,46 @@ class OphiuchusApp(tk.Tk):
         exe = self.vesta_exe_var.get().strip()
         rietan = self.rietan_exe_var.get().strip()
         reference_dir = self.vesta_reference_dir_var.get().strip()
+        multiphase_template = discover_multiphase_template(rietan_exe=rietan or None)
         return (
             f"VESTA 程序：{'已找到' if exe and Path(exe).exists() else '未找到'}\n"
             f"RIETAN-FP：{'已找到，可直接模拟' if rietan and Path(rietan).exists() else '未找到'}\n"
+            f"多相实验定量：{'已就绪' if multiphase_template else '缺少官方模板'}\n"
             f"参考目录：{'已找到' if reference_dir and Path(reference_dir).exists() else '未找到'}"
         )
+
+    def _install_multiphase_support(self, status_label: ttk.Label | None = None) -> Path | None:
+        archive = discover_rietan_archive()
+        if archive is None:
+            selected = filedialog.askopenfilename(
+                title="选择 RIETAN 官方 Windows_versions.zip",
+                initialdir=str(Path.home() / "Downloads"),
+                filetypes=[("RIETAN official archive", "Windows_versions.zip"), ("ZIP archive", "*.zip")],
+                parent=self,
+            )
+            if not selected:
+                return None
+            archive = Path(selected)
+        rietan = discover_rietan_executable(self.rietan_exe_var.get().strip() or None)
+        if rietan is not None:
+            destination = rietan.parent
+        else:
+            local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+            destination = local / "Ophiuchus" / "tools" / "rietan"
+        try:
+            installed = install_multiphase_template_from_archive(archive, destination)
+        except Exception as exc:
+            messagebox.showerror("无法安装多相支持", str(exc), parent=self)
+            return None
+        os.environ["OPHI_RIETAN_MULTIPHASE_TEMPLATE"] = str(installed)
+        if status_label is not None:
+            status_label.configure(text=self._vesta_status_text())
+        messagebox.showinfo(
+            "多相支持已安装",
+            f"已从 RIETAN 官方示例安装多相模板：\n{installed}",
+            parent=self,
+        )
+        return installed
 
     def _launch_vesta_empty(self) -> None:
         try:

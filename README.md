@@ -187,6 +187,16 @@ Open `VESTA / RIETAN` on the main window to inspect or change both executable pa
 
 Temporary `.ins`, `.lst`, and `.gpd` files are removed after each calculation. The scientific report records the actual display engine. If direct simulation fails, Ophi reports the failure and keeps the screening result explicitly labeled as the fallback; it does not relabel pymatgen output as VESTA/RIETAN.
 
+### Guarded multiphase Rietveld refinement
+
+After an analysis has produced CIF-backed candidates, open `RIETAN 受约束精修` and switch from `单相确认` to `多相实验定量`. Select one target and one to three impurity phases. Ophi then runs three real RIETAN-FP jobs with equal, target-dominant, and impurity-dominant starting scales. It uses RIETAN's final scale factors and CIF-derived `Z * M * V` values for the Hill-Howard mass-fraction cross-check; candidate score or peak area is never presented as wt%.
+
+Exact wt% is hidden when any hard gate fails, including invalid scale/ZMV values, failed independent pattern validation, an incomplete phase model indicated by grouped positive residual peaks, disagreement with RIETAN's native mass fractions, or unstable results across the three starting conditions. A non-failing result is still labeled `实验性定量` until the complete instrument/sample workflow is validated against measured standards of known composition. Amorphous content and phases absent from the selected model are not quantified.
+
+The multiphase input is built from the official RIETAN `Cu3Fe4P6_combins` template and `cif2ins.exe`. Ophi does not redistribute that template. In `VESTA / RIETAN 设置`, click `安装多相支持` and select the official `Windows_versions.zip` when it is not found automatically. The installer validates the official marker structure and extracts only `template.ins` beside the configured RIETAN executable. Obtain RIETAN and its current citation instructions from the [official RIETAN-FP distribution page](https://jp-minerals.org/rietan/).
+
+All RIETAN work files remain in an operating-system temporary directory. PNG, profile/reflection CSV files, and provenance JSON are written only after the user clicks the refinement window's export button. The JSON records engine paths, input/settings hashes, CIF SHA-256 values, gate findings, and repeat-run stability ranges.
+
 Ophi can compare a CIF-derived simulated pattern against a VESTA/reference peak table exported by the user. This is the preferred trust check before relying on CIF-derived screening.
 
 For your existing VESTA pattern, prefer the complete `.int` file rather than a selected top-peak CSV:
