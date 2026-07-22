@@ -10,6 +10,8 @@ $pyInstallerDist = Join-Path $root "dist\pyinstaller-portable"
 $releaseRoot = Join-Path $root "dist\Ophiuchus_Portable"
 $zipPath = Join-Path $root "dist\Ophiuchus_Portable.zip"
 $healthPath = Join-Path $buildRoot "portable_health.json"
+$wheelRoot = Join-Path $root "build\portable-site-packages"
+$lockPath = Join-Path $root "requirements-portable-lock.txt"
 
 function Assert-ProjectChild([string]$PathToCheck) {
     $projectPrefix = [IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
@@ -27,12 +29,46 @@ foreach ($path in @($buildRoot, $pyInstallerDist, $releaseRoot, $zipPath)) {
 }
 New-Item -ItemType Directory -Path $buildRoot, $pyInstallerDist, $releaseRoot | Out-Null
 
-& $Python -m PyInstaller --version | Out-Host
+$pythonCommand = Get-Command $Python -ErrorAction Stop
+$pythonExe = $pythonCommand.Source
+$pythonRoot = Split-Path -Parent $pythonExe
+$buildRuntimePaths = @(
+    $pythonRoot,
+    (Join-Path $pythonRoot "DLLs"),
+    (Join-Path $pythonRoot "Library\bin"),
+    (Join-Path $pythonRoot "Scripts")
+)
+$env:PATH = (($buildRuntimePaths | Where-Object { Test-Path -LiteralPath $_ }) + $env:PATH) -join ";"
+
+$lockHash = (Get-FileHash -LiteralPath $lockPath -Algorithm SHA256).Hash
+$wheelStamp = Join-Path $wheelRoot ".requirements.sha256"
+$installedHash = if (Test-Path -LiteralPath $wheelStamp) { (Get-Content -LiteralPath $wheelStamp -Raw).Trim() } else { "" }
+if ($installedHash -ne $lockHash) {
+    Assert-ProjectChild $wheelRoot
+    if (Test-Path -LiteralPath $wheelRoot) {
+        Remove-Item -LiteralPath $wheelRoot -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $wheelRoot | Out-Null
+    & $pythonExe -m pip install `
+        --disable-pip-version-check `
+        --only-binary=:all: `
+        --upgrade `
+        --target $wheelRoot `
+        --requirement $lockPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Portable wheel staging failed with exit code $LASTEXITCODE."
+    }
+    [IO.File]::WriteAllText($wheelStamp, $lockHash, [Text.ASCIIEncoding]::new())
+}
+$env:OPHI_PORTABLE_SITE_PACKAGES = $wheelRoot
+$env:PYTHONPATH = "$wheelRoot;$root"
+
+& $pythonExe -m PyInstaller --version | Out-Host
 if ($LASTEXITCODE -ne 0) {
-    throw "PyInstaller is not installed in the selected build Python: $Python"
+    throw "PyInstaller is not installed in the selected build Python: $pythonExe"
 }
 
-& $Python -m PyInstaller `
+& $pythonExe -m PyInstaller `
     --noconfirm `
     --clean `
     --workpath $buildRoot `
@@ -63,8 +99,15 @@ foreach ($relative in $releaseFiles) {
 New-Item -ItemType Directory -Path (Join-Path $releaseRoot "docs") | Out-Null
 Copy-Item -LiteralPath (Join-Path $root "docs\Ophiuchus_操作手册.md") -Destination (Join-Path $releaseRoot "docs\Ophiuchus_操作手册.md")
 
-& (Join-Path $runtimeTarget "OphiuchusApp.exe") --health-check $healthPath
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $healthPath -PathType Leaf)) {
+$healthProcess = Start-Process `
+    -FilePath (Join-Path $runtimeTarget "OphiuchusApp.exe") `
+    -ArgumentList @("--health-check", "`"$healthPath`"") `
+    -PassThru
+if (-not $healthProcess.WaitForExit(120000)) {
+    Stop-Process -Id $healthProcess.Id -Force -ErrorAction SilentlyContinue
+    throw "Frozen runtime health check timed out after 120 seconds."
+}
+if ($healthProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $healthPath -PathType Leaf)) {
     throw "Frozen runtime health check failed."
 }
 $health = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json

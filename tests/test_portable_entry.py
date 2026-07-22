@@ -5,10 +5,17 @@ from pathlib import Path
 from unittest import mock
 
 
-from ophiuchus.portable_entry import main, portable_health_report
+from ophiuchus.portable_entry import _scientific_smoke_report, main, portable_health_report
 
 
 class PortableEntryTests(unittest.TestCase):
+    def test_scientific_smoke_report_runs_real_xrd_calculation(self):
+        report = _scientific_smoke_report()
+
+        self.assertTrue(report["available"], report)
+        self.assertGreater(report["peak_count"], 0)
+        self.assertGreater(report["maximum_intensity"], 0.0)
+
     def test_health_report_checks_core_runtime_without_exposing_secrets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

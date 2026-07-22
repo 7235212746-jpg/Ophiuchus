@@ -1,0 +1,7 @@
+# Top-level portable build inputs. Transitive dependencies are resolved as Windows wheels.
+numpy==2.4.6
+pandas==3.0.3
+scipy==1.17.1
+matplotlib==3.10.6
+pymatgen==2026.5.4
+mp-api==0.46.4

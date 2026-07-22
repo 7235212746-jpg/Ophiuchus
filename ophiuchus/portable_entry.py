@@ -4,6 +4,7 @@ import argparse
 import importlib
 from importlib.metadata import PackageNotFoundError, version
 import json
+import math
 from pathlib import Path
 import platform
 import sys
@@ -23,7 +24,7 @@ _DEPENDENCIES = {
     "scipy": "scipy",
     "matplotlib": "matplotlib",
     "pymatgen": "pymatgen",
-    "mp-api": "mp_api",
+    "mp-api": "mp_api.client",
 }
 
 
@@ -50,8 +51,35 @@ def _check_user_data_writable(path: Path) -> bool:
         return False
 
 
+def _scientific_smoke_report() -> dict[str, object]:
+    try:
+        from pymatgen.analysis.diffraction.xrd import XRDCalculator
+        from pymatgen.core import Lattice, Structure
+
+        structure = Structure(
+            Lattice.cubic(4.2),
+            ["Cs", "Cl"],
+            [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]],
+        )
+        pattern = XRDCalculator(wavelength="CuKa").get_pattern(
+            structure,
+            two_theta_range=(10.0, 90.0),
+        )
+        peak_count = len(pattern.x)
+        maximum_intensity = max((float(value) for value in pattern.y), default=0.0)
+        available = peak_count > 0 and math.isfinite(maximum_intensity) and maximum_intensity > 0.0
+        return {
+            "available": available,
+            "peak_count": peak_count,
+            "maximum_intensity": maximum_intensity,
+        }
+    except Exception as exc:
+        return {"available": False, "error": str(exc)}
+
+
 def portable_health_report() -> dict[str, object]:
     dependencies = _dependency_report()
+    scientific_smoke = _scientific_smoke_report()
     try:
         import tkinter
 
@@ -61,8 +89,10 @@ def portable_health_report() -> dict[str, object]:
     rietan = discover_rietan_executable()
     manual = resource_root() / "docs" / MANUAL_FILENAME
     data_root = user_data_root()
-    core_ready = tkinter_version is not None and all(
-        bool(item.get("available")) for item in dependencies.values()
+    core_ready = (
+        tkinter_version is not None
+        and all(bool(item.get("available")) for item in dependencies.values())
+        and bool(scientific_smoke.get("available"))
     )
     return {
         "core_ready": core_ready,
@@ -70,6 +100,7 @@ def portable_health_report() -> dict[str, object]:
         "python": platform.python_version(),
         "tkinter": tkinter_version,
         "dependencies": dependencies,
+        "scientific_smoke": scientific_smoke,
         "resource_root": str(resource_root()),
         "manual_available": manual.is_file(),
         "user_data_root": str(data_root),

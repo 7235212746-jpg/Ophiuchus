@@ -13,6 +13,7 @@ __pycache__/
 htmlcov/
 .worktrees/
 build/portable/
+build/portable-site-packages/
 dist/
 
 # Local research data, caches, state, and generated reports

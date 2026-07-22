@@ -81,6 +81,8 @@ class ShareReadinessTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         builder = (root / "build_portable.ps1").read_text(encoding="utf-8")
         spec = (root / "packaging" / "OphiuchusPortable.spec").read_text(encoding="utf-8")
+        entry = (root / "tools" / "OphiuchusPortableEntry.py").read_text(encoding="utf-8")
+        lock = (root / "requirements-portable-lock.txt").read_text(encoding="utf-8")
 
         self.assertIn("PyInstaller", builder)
         self.assertIn("--health-check", builder)
@@ -90,12 +92,26 @@ class ShareReadinessTests(unittest.TestCase):
         self.assertIn("collect_all", spec)
         self.assertIn("copy_metadata", spec)
         self.assertIn("Ophiuchus_操作手册.md", spec)
+        self.assertIn("root = Path(SPECPATH).resolve().parent", spec)
+        self.assertNotIn("root = Path(SPECPATH).resolve().parent.parent", spec)
+        self.assertIn('root / "tools" / "OphiuchusPortableEntry.py"', spec)
+        self.assertIn("from ophiuchus.portable_entry import main", entry)
+        self.assertIn("WaitForExit", builder)
+        self.assertIn('Join-Path $pythonRoot "Library\\bin"', builder)
+        self.assertIn('"PySide6"', spec)
+        self.assertIn("requirements-portable-lock.txt", builder)
+        self.assertIn("--target", builder)
+        self.assertIn("OPHI_PORTABLE_SITE_PACKAGES", builder)
+        self.assertIn("OPHI_PORTABLE_SITE_PACKAGES", spec)
+        self.assertIn('discover_python_modules(portable_site_packages, "pymatgen")', spec)
+        self.assertTrue(all("==" in line for line in lock.splitlines() if line and not line.startswith("#")))
 
     def test_gitignore_excludes_portable_build_outputs(self):
         root = Path(__file__).resolve().parents[1]
         ignored = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
 
         self.assertIn("build/portable/", ignored)
+        self.assertIn("build/portable-site-packages/", ignored)
         self.assertIn("dist/", ignored)
 
     def test_gitignore_excludes_local_research_data_and_internal_work_notes(self):

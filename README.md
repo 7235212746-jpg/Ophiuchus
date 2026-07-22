@@ -6,7 +6,11 @@ Current version: v0.2.0-dev
 
 Maintainer contact: `wanyc@issp.u-tokyo.ac.jp`
 
-On Windows, double-click `Ophiuchus.exe` to launch without a console window. The project folder can live anywhere. Run `install_desktop_shortcut.bat` after cloning or moving the folder to create a desktop shortcut that resolves the current path at runtime. Rebuild the launcher with `build_launcher_exe.bat` after changing its wrapper source.
+For a computer without Python or scientific libraries, extract `Ophiuchus_Portable.zip` completely and double-click `Ophiuchus.exe`. Keep the adjacent `runtime` folder in place; the portable build contains its own pinned Python, NumPy, SciPy, Matplotlib, pymatgen, and mp-api runtime. User settings, API credentials, the local structure library, caches, and deliberately saved results are kept under `%LOCALAPPDATA%\Ophiuchus`, not inside the release folder.
+
+VESTA, RIETAN-FP, and `cif2ins` are optional external crystallographic engines with separate distribution terms and are not included in the portable archive. Their dependent controls remain unavailable or explicitly fall back until the user configures legal local copies. Core import, candidate screening, pymatgen XRD simulation, plotting, and Materials Project access do not require a local Python installation.
+
+For source development on Windows, double-click `Ophiuchus.exe` to launch without a console window. The project folder can live anywhere. Run `install_desktop_shortcut.bat` after cloning or moving the folder to create a desktop shortcut that resolves the current path at runtime. Rebuild the launcher with `build_launcher_exe.bat` after changing its wrapper source. Build the self-contained archive with `build_portable.bat`; its dependency versions are pinned in `requirements-portable-lock.txt`, and the build fails unless the frozen runtime passes its health check.
 
 Ophiuchus is a local-first materials research workflow project. Phase 1 is the Ophi XRD Candidate Screener. Phase 2 is building the local structure library and evidence workbench foundation.
 
