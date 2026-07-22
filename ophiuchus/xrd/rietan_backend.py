@@ -101,6 +101,25 @@ def discover_cif2ins_executable(
     return _first_existing_file(candidates)
 
 
+def discover_multiphase_template(
+    configured: str | Path | None = None,
+    *,
+    rietan_exe: str | Path | None = None,
+) -> Path | None:
+    local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    rietan = discover_rietan_executable(rietan_exe)
+    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+    candidates = [
+        configured,
+        os.environ.get("OPHI_RIETAN_MULTIPHASE_TEMPLATE"),
+        None if rietan is None else rietan.parent / "template_multiphase.ins",
+        local / "Ophiuchus" / "tools" / "rietan" / "template_multiphase.ins",
+        program_files / "RIETAN_VENUS_examples" / "Cu3Fe4P6_combins" / "template.ins",
+        program_files / "RIETAN_VENUS" / "template_multiphase.ins",
+    ]
+    return _first_existing_file(candidates)
+
+
 def _first_existing_file(candidates: Iterable[str | Path | None]) -> Path | None:
     for candidate in candidates:
         if not candidate:

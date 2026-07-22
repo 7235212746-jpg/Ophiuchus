@@ -6,7 +6,7 @@ from unittest import mock
 
 from ophiuchus.xrd.multiphase_input import combine_phase_inputs, export_phase_input
 from ophiuchus.xrd.multiphase_models import PhaseRefinementInput
-from ophiuchus.xrd.rietan_backend import discover_cif2ins_executable
+from ophiuchus.xrd.rietan_backend import discover_cif2ins_executable, discover_multiphase_template
 
 
 TEMPLATE = """Title
@@ -92,6 +92,16 @@ class MultiphaseInputTests(unittest.TestCase):
             cif2ins.write_bytes(b"")
 
             self.assertEqual(discover_cif2ins_executable(rietan_exe=rietan), cif2ins.resolve())
+
+    def test_discovers_multiphase_template_next_to_configured_rietan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rietan = root / "RIETAN.exe"
+            template = root / "template_multiphase.ins"
+            rietan.write_bytes(b"")
+            template.write_text(TEMPLATE, encoding="utf-8")
+
+            self.assertEqual(discover_multiphase_template(rietan_exe=rietan), template.resolve())
 
     def test_export_uses_ascii_job_name_for_unicode_cif(self):
         with tempfile.TemporaryDirectory() as tmp:
