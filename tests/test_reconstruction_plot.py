@@ -33,6 +33,28 @@ class ReconstructionPlotTests(unittest.TestCase):
         self.assertEqual(view.layers[0].label, "FeGe")
         self.assertEqual(view.layers[1].color, "#d88700")
 
+    def test_background_is_part_of_reconstruction_but_not_phase_sum(self):
+        x = np.array([10.0, 20.0, 30.0])
+        original = np.array([11.0, 17.0, 13.0])
+        background = np.array([10.0, 11.0, 12.0])
+        phase = np.array([1.0, 4.0, 1.0])
+
+        view = build_reconstruction_view(
+            x,
+            original,
+            [phase],
+            labels=["FeGe"],
+            colors=["#111111"],
+            background=background,
+        )
+
+        np.testing.assert_array_equal(view.background, background)
+        np.testing.assert_array_equal(view.corrected, original - background)
+        np.testing.assert_array_equal(view.phase_sum, phase)
+        np.testing.assert_array_equal(view.reconstructed, background + phase)
+        np.testing.assert_array_equal(view.residual, original - background - phase)
+        np.testing.assert_array_equal(view.overflow, [0.0, 0.0, 0.0])
+
     def test_phase_lanes_use_local_normalization_without_changing_raw_values(self):
         x = np.array([10.0, 20.0, 30.0])
         original = np.array([100.0, 100.0, 100.0])

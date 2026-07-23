@@ -62,11 +62,23 @@ class PhaseStrippingExportTests(unittest.TestCase):
 
             self.assertEqual(
                 list(rows[0]),
-                ["two_theta", "original_y", "fitted_total", "residual_y", "contribution_operation_1"],
+                [
+                    "two_theta",
+                    "original_y",
+                    "background_y",
+                    "corrected_y",
+                    "fitted_total",
+                    "reconstructed_y",
+                    "residual_y",
+                    "contribution_operation_1",
+                ],
             )
             self.assertEqual(len(rows), session.context.x.size)
             self.assertAlmostEqual(float(rows[0]["original_y"]), float(session.context.intensity[0]))
+            self.assertAlmostEqual(float(rows[0]["background_y"]), float(session.background_y[0]))
+            self.assertAlmostEqual(float(rows[0]["corrected_y"]), float(session.corrected_intensity[0]))
             self.assertAlmostEqual(float(rows[0]["fitted_total"]), float(session.fitted_total[0]))
+            self.assertAlmostEqual(float(rows[0]["reconstructed_y"]), float(session.reconstructed_y[0]))
             self.assertAlmostEqual(float(rows[0]["residual_y"]), float(session.residual_y[0]))
             self.assertEqual(payload["accepted_operations"][0]["operation_id"], "operation-1")
             self.assertEqual(payload["accepted_operations"][0]["candidate"]["candidate_id"], "phase-fege")
@@ -75,6 +87,8 @@ class PhaseStrippingExportTests(unittest.TestCase):
             self.assertEqual(payload["accepted_operations"][0]["candidate"]["pattern_fingerprint"], "pattern-sha256")
             self.assertEqual(payload["instrument_settings"]["radiation"], "CuKalpha12")
             self.assertEqual(payload["fit_bounds"]["sigma_deg"], [0.049, 0.051])
+            self.assertEqual(payload["format"], "ophiuchus.phase_stripping.session.v2")
+            self.assertEqual(payload["background_model"]["method"], "none")
             self.assertEqual(payload["accepted_operations"][0]["fit"]["scale"], session.accepted_operations[0].phase_fit.scale)
             restored = PhaseStrippingSession.from_dict(payload["session"])
             self.assertEqual(restored.accepted_operations, session.accepted_operations)

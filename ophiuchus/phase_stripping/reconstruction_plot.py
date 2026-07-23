@@ -20,9 +20,12 @@ class ReconstructionLayer:
 class ReconstructionView:
     x: np.ndarray
     original: np.ndarray
+    background: np.ndarray
+    corrected: np.ndarray
     layers: tuple[ReconstructionLayer, ...]
     phase_sum: np.ndarray
     proposed_phase_sum: np.ndarray
+    reconstructed: np.ndarray
     residual: np.ndarray
     overflow: np.ndarray
     preview_layer: ReconstructionLayer | None = None
@@ -48,11 +51,20 @@ def build_reconstruction_view(
     preview: np.ndarray | None = None,
     preview_label: str = "Preview",
     preview_color: str = "#15a34a",
+    background: np.ndarray | None = None,
 ) -> ReconstructionView:
     x_values = _immutable_1d(x, "x")
     original_values = _immutable_1d(original, "original")
     if x_values.shape != original_values.shape:
         raise ValueError("x and original must have the same shape.")
+    background_values = _immutable(
+        np.zeros_like(original_values, dtype=float)
+        if background is None
+        else _immutable_1d(background, "background")
+    )
+    if background_values.shape != x_values.shape:
+        raise ValueError("background must have the same shape as x.")
+    corrected = _immutable(original_values - background_values)
 
     contribution_values = tuple(_immutable_1d(values, "contribution") for values in contributions)
     if len(labels) != len(contribution_values) or len(colors) != len(contribution_values):
@@ -77,8 +89,9 @@ def build_reconstruction_view(
         )
 
     phase_sum = _immutable(cumulative)
-    residual = _immutable(original_values - phase_sum)
-    overflow = _immutable(np.maximum(phase_sum - original_values, 0.0))
+    reconstructed = _immutable(background_values + phase_sum)
+    residual = _immutable(corrected - phase_sum)
+    overflow = _immutable(np.maximum(phase_sum - corrected, 0.0))
     preview_layer = None
     proposed = np.array(phase_sum, copy=True)
     if preview is not None:
@@ -98,9 +111,12 @@ def build_reconstruction_view(
     return ReconstructionView(
         x=x_values,
         original=original_values,
+        background=background_values,
+        corrected=corrected,
         layers=tuple(layers),
         phase_sum=phase_sum,
         proposed_phase_sum=_immutable(proposed),
+        reconstructed=reconstructed,
         residual=residual,
         overflow=overflow,
         preview_layer=preview_layer,

@@ -66,6 +66,9 @@ class PhaseStrippingWindowTests(unittest.TestCase):
             self.assertTrue(window.pattern_axis.get_shared_x_axes().joined(window.pattern_axis, window.contribution_axis))
             self.assertTrue(window.pattern_axis.get_shared_x_axes().joined(window.pattern_axis, window.residual_axis))
             self.assertGreaterEqual(len(window.pattern_axis.lines), 2)
+            self.assertEqual(window.session.background_method, "asls")
+            self.assertTrue(any(line.get_label() == "估计背景" for line in window.pattern_axis.lines))
+            self.assertIn("AsLS", window.status_var.get())
             self.assertGreaterEqual(len(window.residual_axis.collections), 2)
             self.assertIn("Microsoft YaHei UI", rcParams["font.sans-serif"])
             self.assertEqual(len(window.candidate_tree.get_children()), 1)
@@ -126,6 +129,8 @@ class PhaseStrippingWindowTests(unittest.TestCase):
 
         try:
             self.assertTrue(any(values[0] == "实验强度" for values in rows))
+            self.assertTrue(any(values[0] == "估计背景" for values in rows))
+            self.assertTrue(any(values[0] == "扣背景后" for values in rows))
             self.assertTrue(any(values[0] == "已解释合计" for values in rows))
             self.assertTrue(any(values[0] == "FeGe" and values[3] == "100" for values in rows))
             self.assertIn("21.0000", window.readout_var.get())

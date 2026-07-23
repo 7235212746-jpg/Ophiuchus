@@ -157,6 +157,43 @@ class PhaseStrippingSessionTests(unittest.TestCase):
         self.assertAlmostEqual(preview.phase_fit.scale, 1.7, places=4)
         np.testing.assert_allclose(session.residual_y, np.zeros_like(expected), rtol=0.0, atol=1e-5)
 
+    def test_session_subtracts_fixed_background_before_phase_fitting(self):
+        x = np.arange(20.0, 24.001, 0.002)
+        background = 30.0 + 0.5 * (x - 20.0)
+        candidate = make_candidate([Peak("p1", 21.0, 100.0), Peak("p2", 23.0, 50.0)])
+        phase = 2.0 * project_candidate_profile(x, candidate, shift_deg=0.0, sigma_deg=0.05)
+        session = PhaseStrippingSession(
+            make_context(x, background + phase),
+            background_y=background,
+            background_method="asls",
+            background_parameters={"smoothness": 1.0e6, "asymmetry": 0.001, "iterations": 12},
+        )
+
+        np.testing.assert_allclose(session.corrected_intensity, phase, rtol=0.0, atol=1e-12)
+        np.testing.assert_allclose(session.residual_y, phase, rtol=0.0, atol=1e-12)
+        session.accept_preview(session.preview(candidate))
+
+        np.testing.assert_allclose(session.residual_y, np.zeros_like(phase), rtol=0.0, atol=1e-5)
+        np.testing.assert_allclose(session.reconstructed_y, background + session.fitted_total)
+        self.assertFalse(session.background_y.flags.writeable)
+
+    def test_session_serialization_preserves_background_model_exactly(self):
+        x = np.array([20.0, 20.1, 20.2])
+        background = np.array([10.0, 11.0, 12.0])
+        session = PhaseStrippingSession(
+            make_context(x, background + np.array([0.0, 3.0, 0.0])),
+            background_y=background,
+            background_method="asls",
+            background_parameters={"smoothness": 123.0, "asymmetry": 0.01, "iterations": 8},
+        )
+
+        restored = PhaseStrippingSession.from_dict(json.loads(json.dumps(session.to_dict(), allow_nan=False)))
+
+        np.testing.assert_array_equal(restored.background_y, background)
+        np.testing.assert_array_equal(restored.corrected_intensity, session.corrected_intensity)
+        self.assertEqual(restored.background_method, "asls")
+        self.assertEqual(restored.background_parameters, session.background_parameters)
+
     def test_fitter_recovers_one_bounded_shift_for_every_candidate_peak(self):
         x = np.arange(20.0, 28.001, 0.002)
         candidate = make_candidate([Peak("p1", 21.0, 100.0), Peak("p2", 24.0, 60.0), Peak("p3", 26.5, 45.0)])

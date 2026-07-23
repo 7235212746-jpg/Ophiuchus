@@ -47,12 +47,30 @@ def export_phase_stripping_session(session: PhaseStrippingSession, folder: str |
 
 def _write_csv(session: PhaseStrippingSession, path: Path) -> None:
     contribution_columns = [f"contribution_{operation.operation_id.replace('-', '_')}" for operation in session.accepted_operations]
-    headers = ["two_theta", "original_y", "fitted_total", "residual_y", *contribution_columns]
+    headers = [
+        "two_theta",
+        "original_y",
+        "background_y",
+        "corrected_y",
+        "fitted_total",
+        "reconstructed_y",
+        "residual_y",
+        *contribution_columns,
+    ]
     contributions = session.accepted_contributions
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(headers)
-        for index, values in enumerate(zip(session.context.x, session.context.intensity, session.fitted_total, session.residual_y)):
+        rows = zip(
+            session.context.x,
+            session.context.intensity,
+            session.background_y,
+            session.corrected_intensity,
+            session.fitted_total,
+            session.reconstructed_y,
+            session.residual_y,
+        )
+        for index, values in enumerate(rows):
             writer.writerow([*values, *(contribution[index] for contribution in contributions)])
 
 
@@ -80,7 +98,7 @@ def _session_payload(session: PhaseStrippingSession) -> dict[str, Any]:
         )
     context = serialized["context"]
     return {
-        "format": "ophiuchus.phase_stripping.session.v1",
+        "format": "ophiuchus.phase_stripping.session.v2",
         "instrument_settings": {
             "radiation": context["radiation"],
             "wavelength_angstrom": context["wavelength_angstrom"],
@@ -88,30 +106,36 @@ def _session_payload(session: PhaseStrippingSession) -> dict[str, Any]:
             "tolerance_deg": context["tolerance_deg"],
         },
         "fit_bounds": serialized["bounds"],
+        "background_model": serialized["background"],
         "accepted_operations": accepted_operations,
         "session": serialized,
     }
 
 
 def _write_plot(session: PhaseStrippingSession, path: Path) -> None:
-    figure = Figure(figsize=(12, 6), dpi=160, facecolor="#ffffff")
+    figure = Figure(figsize=(12, 7), dpi=160, facecolor="#ffffff")
     canvas = FigureCanvasAgg(figure)
-    axis = figure.subplots()
+    pattern_axis, residual_axis = figure.subplots(2, 1, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
     x = session.context.x
-    axis.set_facecolor("#ffffff")
-    axis.plot(x, session.context.intensity, color="#111827", linewidth=1.15, label="Original")
-    axis.plot(x, session.fitted_total, color="#3974d8", linewidth=1.1, label="Fitted total")
+    pattern_axis.set_facecolor("#ffffff")
+    residual_axis.set_facecolor("#ffffff")
+    pattern_axis.plot(x, session.context.intensity, color="#111827", linewidth=1.15, label="Original")
+    pattern_axis.plot(x, session.background_y, color="#d48a17", linewidth=1.0, label="Estimated background")
+    pattern_axis.plot(x, session.reconstructed_y, color="#3974d8", linewidth=1.1, label="Background + phase model")
     colors = ("#2a9d8f", "#8f5bd7", "#d48a17", "#0086b3", "#b84a62")
     for index, (operation, contribution) in enumerate(zip(session.accepted_operations, session.accepted_contributions)):
-        axis.plot(x, contribution, color=colors[index % len(colors)], linewidth=0.9, label=operation.phase_fit.candidate_id)
-    axis.plot(x, session.residual_y, color="#c0392b", linewidth=1.0, label="Signed residual")
-    axis.axhline(0.0, color="#7b8798", linewidth=0.7)
-    axis.set_xlabel("2theta (deg)")
-    axis.set_ylabel("Intensity")
-    axis.grid(color="#e6edf5", linewidth=0.6, alpha=0.8)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.legend(loc="best", frameon=False, ncols=2)
+        pattern_axis.plot(x, session.background_y + contribution, color=colors[index % len(colors)], linewidth=0.8, alpha=0.8, label=operation.phase_fit.candidate_id)
+    residual_axis.plot(x, session.residual_y, color="#c0392b", linewidth=1.0, label="Signed residual after background subtraction")
+    residual_axis.axhline(0.0, color="#7b8798", linewidth=0.7)
+    residual_axis.set_xlabel("2theta (deg)")
+    pattern_axis.set_ylabel("Intensity")
+    residual_axis.set_ylabel("Residual")
+    for axis in (pattern_axis, residual_axis):
+        axis.grid(color="#e6edf5", linewidth=0.6, alpha=0.8)
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+    pattern_axis.legend(loc="best", frameon=False, ncols=2)
+    residual_axis.legend(loc="best", frameon=False)
     figure.tight_layout()
     try:
         canvas.print_png(path)

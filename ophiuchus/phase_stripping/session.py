@@ -112,10 +112,23 @@ class PhaseStrippingSession:
         context: AnalysisContext,
         bounds: FitBounds | None = None,
         fitter: PhaseContributionFitter | None = None,
+        *,
+        background_y: np.ndarray | None = None,
+        background_method: str = "none",
+        background_parameters: dict[str, float | int] | None = None,
     ) -> None:
         self.context = context
         self.bounds = bounds or DEFAULT_FIT_BOUNDS
         self._fitter = fitter or PhaseContributionFitter()
+        background = np.zeros_like(context.intensity, dtype=float) if background_y is None else np.asarray(background_y, dtype=float)
+        if background.shape != context.intensity.shape:
+            raise ValueError("background_y must have the same shape as the experimental intensity.")
+        if not np.all(np.isfinite(background)):
+            raise ValueError("background_y must contain only finite values.")
+        self._background_y = np.array(background, dtype=float, copy=True)
+        self._background_y.setflags(write=False)
+        self.background_method = str(background_method)
+        self._background_parameters = dict(background_parameters or {})
         self._accepted: list[_StoredOperation] = []
         self._redo: list[_StoredOperation] = []
         self._excluded_candidate_ids: set[str] = set()
@@ -156,6 +169,22 @@ class PhaseStrippingSession:
         return self._preview
 
     @property
+    def background_y(self) -> np.ndarray:
+        values = np.array(self._background_y, copy=True)
+        values.setflags(write=False)
+        return values
+
+    @property
+    def background_parameters(self) -> dict[str, float | int]:
+        return dict(self._background_parameters)
+
+    @property
+    def corrected_intensity(self) -> np.ndarray:
+        values = np.asarray(self.context.intensity, dtype=float) - self._background_y
+        values.setflags(write=False)
+        return values
+
+    @property
     def fitted_total(self) -> np.ndarray:
         total = np.zeros_like(self.context.intensity, dtype=float)
         for stored in self._accepted:
@@ -164,7 +193,11 @@ class PhaseStrippingSession:
 
     @property
     def residual_y(self) -> np.ndarray:
-        return np.array(self.context.intensity, copy=True) - self.fitted_total
+        return np.array(self.corrected_intensity, copy=True) - self.fitted_total
+
+    @property
+    def reconstructed_y(self) -> np.ndarray:
+        return np.array(self._background_y, copy=True) + self.fitted_total
 
     def preview(
         self,
@@ -300,6 +333,12 @@ class PhaseStrippingSession:
     def to_dict(self) -> dict[str, Any]:
         return {
             "context": self._context_to_dict(self.context),
+            "background": {
+                "values": self._background_y.tolist(),
+                "method": self.background_method,
+                "parameters": dict(self._background_parameters),
+                "fingerprint": self._array_fingerprint(self._background_y),
+            },
             "bounds": self._bounds_to_dict(self.bounds),
             "accepted": [self._stored_to_dict(stored) for stored in self._accepted],
             "redo": [self._stored_to_dict(stored) for stored in self._redo],
@@ -321,7 +360,14 @@ class PhaseStrippingSession:
             source_fingerprint=context_data["source_fingerprint"],
             data_fingerprint=context_data["data_fingerprint"],
         )
-        session = cls(context, cls._bounds_from_dict(payload["bounds"]))
+        background_data = payload.get("background")
+        session = cls(
+            context,
+            cls._bounds_from_dict(payload["bounds"]),
+            background_y=None if background_data is None else np.array(background_data["values"], dtype=float),
+            background_method="none" if background_data is None else str(background_data.get("method", "none")),
+            background_parameters={} if background_data is None else dict(background_data.get("parameters", {})),
+        )
         session._accepted = [cls._stored_from_dict(item) for item in payload["accepted"]]
         session._redo = [cls._stored_from_dict(item) for item in payload["redo"]]
         session._excluded_candidate_ids = set(payload["excluded_candidate_ids"])

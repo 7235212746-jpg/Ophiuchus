@@ -20,16 +20,18 @@ cannot silently refer to different runs.
 
 - **Candidate pane:** search and sort phases, inspect evidence, preview a fit,
   accept it, exclude it from ranking, or open its CIF.
-- **Plot pane:** compare the immutable original pattern, fitted total, signed
-  residual, accepted phase contributions, and the current preview. Negative
-  residual intensity remains visible.
+- **Plot pane:** compare the immutable original pattern, fixed estimated
+  background, background-plus-phase reconstruction, signed corrected residual,
+  accepted phase contributions, and the current preview. Negative residual
+  intensity remains visible.
 - **Control pane:** choose full-spectrum or selected-range fitting, inspect and
   adjust bounded scale/shift/width parameters, then use Preview, Accept,
   Cancel, Undo, Redo, Reset, and Export.
 
 Preview never changes the accepted session. Accept records one immutable
-operation. Undo, Redo, and Reset recompute from the original intensity array;
-they do not repeatedly subtract and add rounded curves.
+operation. Undo, Redo, and Reset recompute from the same background-corrected
+intensity array; they do not repeatedly subtract and add rounded curves or
+re-estimate the background after each accepted phase.
 
 ## Scientific Model
 
@@ -37,8 +39,15 @@ For accepted candidate phases `k`, Ophiuchus uses
 
 ```text
 c_k(x) = s_k P_k(x - delta_k, sigma_k)
-y_residual(x) = y_original(x) - sum_k c_k(x)
+y_corrected(x) = y_original(x) - b_AsLS(x)
+y_residual(x) = y_corrected(x) - sum_k c_k(x)
+y_reconstructed(x) = b_AsLS(x) + sum_k c_k(x)
 ```
+
+`b_AsLS` is a smooth asymmetric-least-squares background estimated once when
+the phase-stripping window opens. Its curve is shown explicitly and stored in
+the exported session. It is a model, not a measured background; broad sample
+features can therefore require inspection rather than blind acceptance.
 
 `P_k` is projected from the complete canonical peak list produced by the same
 validated XRD backend used by the main analysis. One global 2theta shift is
@@ -81,10 +90,12 @@ deleted or expanded automatically.
   `phase_stripping_residual.csv`, `phase_stripping_session.json`, and
   `phase_stripping_residual.png`.
 
-The CSV contains 2theta, original intensity, fitted total, signed residual, and
-one column per accepted contribution. The JSON records operation order,
-candidate/CIF provenance and hashes, instrument settings, fit bounds, and fit
-parameters. Export reuses stored contributions and does not rerun simulation.
+The CSV contains 2theta, original intensity, estimated background,
+background-corrected intensity, fitted phase total, complete reconstruction,
+signed residual, and one column per accepted contribution. The JSON records
+the fixed background model and fingerprint, operation order, candidate/CIF
+provenance and hashes, instrument settings, fit bounds, and fit parameters.
+Export reuses stored contributions and does not rerun simulation.
 
 The command-line analysis interface keeps its existing behavior and writes
 directly to the specified `--out-dir`.

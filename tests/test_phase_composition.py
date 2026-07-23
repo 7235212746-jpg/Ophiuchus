@@ -40,7 +40,12 @@ def make_session():
         source_fingerprint="source",
         data_fingerprint="data",
     )
-    session = PhaseStrippingSession(context)
+    session = PhaseStrippingSession(
+        context,
+        background_y=np.full_like(x, 0.5),
+        background_method="asls",
+        background_parameters={"smoothness": 1.0e6, "asymmetry": 0.001, "iterations": 12},
+    )
     accepted = session.preview_with_parameters(first, scale=3.0, shift_deg=0.0, sigma_deg=0.06)
     session.accept_preview(accepted)
     preview = session.preview_with_parameters(second, scale=0.5, shift_deg=-0.04, sigma_deg=0.06)
@@ -54,8 +59,16 @@ class PeakCompositionTests(unittest.TestCase):
         result = inspect_peak_composition(session, candidates, 21.002)
 
         self.assertAlmostEqual(result.two_theta, 21.0, places=9)
-        self.assertAlmostEqual(result.experimental, result.explained + result.residual, places=12)
-        self.assertEqual([row.kind for row in result.rows[:3]], ["experimental", "explained", "residual"])
+        self.assertAlmostEqual(
+            result.experimental,
+            result.background + result.explained + result.residual,
+            places=12,
+        )
+        self.assertAlmostEqual(result.corrected, result.explained + result.residual, places=12)
+        self.assertEqual(
+            [row.kind for row in result.rows[:5]],
+            ["experimental", "background", "corrected", "explained", "residual"],
+        )
 
     def test_phase_row_uses_formula_share_and_nearest_shifted_reflection(self):
         session, candidates, _preview = make_session()
@@ -78,7 +91,11 @@ class PeakCompositionTests(unittest.TestCase):
 
         self.assertEqual(preview_row.label, "Fe3Ge (预览)")
         self.assertAlmostEqual(preview_row.intensity, 0.5, places=6)
-        self.assertAlmostEqual(result.experimental, result.explained + result.residual, places=12)
+        self.assertAlmostEqual(
+            result.experimental,
+            result.background + result.explained + result.residual,
+            places=12,
+        )
         self.assertAlmostEqual(result.explained, 3.0, places=6)
         self.assertEqual(preview_row.hkl, "110")
 

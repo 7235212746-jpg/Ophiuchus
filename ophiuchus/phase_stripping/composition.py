@@ -26,6 +26,8 @@ class PeakComposition:
     index: int
     two_theta: float
     experimental: float
+    background: float
+    corrected: float
     explained: float
     residual: float
     rows: tuple[PeakCompositionRow, ...]
@@ -43,10 +45,14 @@ def inspect_peak_composition(
     index = int(np.argmin(np.abs(x - float(two_theta))))
     snapped = float(x[index])
     experimental = float(session.context.intensity[index])
+    background = float(session.background_y[index])
+    corrected = float(session.corrected_intensity[index])
     explained = float(session.fitted_total[index])
     residual = float(session.residual_y[index])
     rows: list[PeakCompositionRow] = [
         PeakCompositionRow("实验强度", "experimental", experimental),
+        PeakCompositionRow("估计背景", "background", background),
+        PeakCompositionRow("扣背景后", "corrected", corrected),
         PeakCompositionRow("已解释合计", "explained", explained),
         PeakCompositionRow("有符号残差", "residual", residual),
     ]
@@ -85,7 +91,16 @@ def inspect_peak_composition(
             )
         )
 
-    return PeakComposition(index, snapped, experimental, explained, residual, tuple(rows))
+    return PeakComposition(
+        index=index,
+        two_theta=snapped,
+        experimental=experimental,
+        background=background,
+        corrected=corrected,
+        explained=explained,
+        residual=residual,
+        rows=tuple(rows),
+    )
 
 
 def _phase_row(

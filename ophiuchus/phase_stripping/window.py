@@ -16,6 +16,7 @@ from matplotlib.figure import Figure
 from ophiuchus.theme import COLORS, FONTS, SPACING, configure_matplotlib_fonts
 from ophiuchus.xrd.models import Candidate, Peak
 
+from .background import estimate_xrd_background
 from .composition import inspect_peak_composition
 from .export import export_phase_stripping_session
 from .models import AnalysisContext
@@ -47,7 +48,13 @@ class PhaseStrippingWindow(tk.Toplevel):
             max(620, min(680, screen_height - 140)),
         )
         self.configure(bg=COLORS["background"])
-        self.session = PhaseStrippingSession(context)
+        background = estimate_xrd_background(context.x, context.intensity)
+        self.session = PhaseStrippingSession(
+            context,
+            background_y=background.values,
+            background_method=background.method,
+            background_parameters=background.parameters,
+        )
         self.candidates = list(candidates)
         self.element_scope = tuple(element_scope)
         self._on_closed = on_closed
@@ -72,7 +79,7 @@ class PhaseStrippingWindow(tk.Toplevel):
         self.warning_var = tk.StringVar(value="拟合比例仅用于候选证据，不是 Rietveld 定量相含量。")
         self.status_var = tk.StringVar(
             value=f"继承：{context.radiation} / {context.wavelength_angstrom:.6f} A / "
-            f"{context.two_theta_range[0]:.2f}-{context.two_theta_range[1]:.2f} deg"
+            f"{context.two_theta_range[0]:.2f}-{context.two_theta_range[1]:.2f} deg / 背景：AsLS（固定）"
         )
 
         self._build_layout()
@@ -465,11 +472,11 @@ class PhaseStrippingWindow(tk.Toplevel):
             self._refresh_all()
 
     def _reset(self) -> None:
-        if self.session.accepted_operations and not messagebox.askyesno("重置剥离", "恢复到完整原始谱并清空全部接受历史？", parent=self):
+        if self.session.accepted_operations and not messagebox.askyesno("重置剥离", "清空全部物相接受历史并恢复扣背景后的晶相信号？\n原始谱和固定背景模型不会改变。", parent=self):
             return
         self.session.reset()
         self._preview = None
-        self.warning_var.set("已恢复完整原始谱。")
+        self.warning_var.set("已清空物相操作；原始谱与固定背景模型保持不变。")
         self._refresh_all()
 
     def _populate_peak_tree(self) -> None:
@@ -502,10 +509,13 @@ class PhaseStrippingWindow(tk.Toplevel):
             axis.clear()
         x = self.session.context.x
         experimental = self.session.context.intensity
+        background = self.session.background_y
         explained = self.session.fitted_total
+        reconstructed = self.session.reconstructed_y
         residual = self.session.residual_y
         self.pattern_axis.plot(x, experimental, color="#111827", linewidth=1.05, label="实验谱")
-        self.pattern_axis.plot(x, explained, color="#3974d8", linewidth=1.15, label="已接受相合计")
+        self.pattern_axis.plot(x, background, color="#d48a17", linewidth=1.05, label="估计背景")
+        self.pattern_axis.plot(x, reconstructed, color="#3974d8", linewidth=1.15, label="背景 + 已接受相")
         colors = ("#2a9d8f", "#8f5bd7", "#d48a17", "#0086b3", "#b84a62")
         candidates_by_id = {candidate.candidate_id: candidate for candidate in self.candidates}
         contribution_ticks: list[float] = []
@@ -531,7 +541,7 @@ class PhaseStrippingWindow(tk.Toplevel):
             contribution_ticks.append(baseline + 0.32)
             contribution_labels.append(label)
         if self._preview is not None:
-            preview_total = explained + self._preview.contribution
+            preview_total = background + explained + self._preview.contribution
             self.pattern_axis.plot(x, preview_total, color="#15a34a", linewidth=1.0, linestyle="--", label="含预览的重构")
             baseline = float(len(contribution_ticks))
             maximum = max(float(np.max(self._preview.contribution)), np.finfo(float).eps)
@@ -551,7 +561,8 @@ class PhaseStrippingWindow(tk.Toplevel):
             positions = [peak.two_theta + shift for peak in self._selected_candidate.theory_peaks]
             ymax = max(float(np.max(experimental)), 1.0)
             heights = [0.08 * ymax * peak.intensity / 100.0 for peak in self._selected_candidate.theory_peaks]
-            self.pattern_axis.vlines(positions, 0.0, heights, color="#15a34a", linewidth=0.8, alpha=0.55, label="所选候选峰")
+            stick_bases = np.interp(positions, x, background)
+            self.pattern_axis.vlines(positions, stick_bases, stick_bases + heights, color="#15a34a", linewidth=0.8, alpha=0.55, label="所选候选峰")
 
         self.residual_axis.plot(x, residual, color="#b42318", linewidth=0.9, label="有符号残差")
         self.residual_axis.fill_between(x, 0.0, residual, where=residual >= 0.0, color="#e05a47", alpha=0.23)
@@ -587,6 +598,8 @@ class PhaseStrippingWindow(tk.Toplevel):
             result = self._populate_composition_tree(float(event.xdata))
             self.readout_var.set(
                 f"2theta {result.two_theta:.4f} | 实验 {self._format_point_intensity(result.experimental)} | "
+                f"背景 {self._format_point_intensity(result.background)} | "
+                f"扣背景 {self._format_point_intensity(result.corrected)} | "
                 f"解释 {self._format_point_intensity(result.explained)} | "
                 f"残差 {self._format_point_intensity(result.residual)}"
             )
