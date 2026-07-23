@@ -1511,6 +1511,9 @@ class OphiuchusApp(tk.Tk):
                 self._write_log(f"目标相候选已刷新：{len(labels)} 个。当前目标相：{self.target_phase_var.get()}")
 
     def _import_target_phase_cif(self) -> None:
+        if self.running:
+            self.status_var.set("当前任务尚未完成，请稍后再导入目标相。")
+            return
         if not self.library_var.get().strip():
             self.status_var.set("还不能导入目标相：请先选择结构库数据库。")
             messagebox.showwarning("还缺少必要输入", "请先选择本地结构库数据库。")
@@ -1522,23 +1525,18 @@ class OphiuchusApp(tk.Tk):
         )
         if not path:
             return
-        try:
-            imported = import_target_cif_to_library(path, self.library_var.get())
-            if not self.elements_var.get().strip() and imported.get("elements"):
-                self.elements_var.set(" ".join(imported["elements"]))
-            build_library_cache_from_folder(self.library_var.get())
-            self._refresh_library_table()
-            self._refresh_target_phase_options()
-            label = str(imported.get("label") or "")
-            if label in self.target_phase_options:
-                self.target_phase_var.set(label)
-            self.status_var.set("目标相已导入并选中。")
-            self._write_log(f"目标相 CIF 已导入：\n{path}\n当前目标相：{self.target_phase_var.get()}")
-        except Exception as exc:
-            guidance = self._friendly_error(exc)
-            self.status_var.set("目标相导入失败。")
-            self._write_log(guidance)
-            messagebox.showerror("目标相导入失败", guidance)
+        self.running = True
+        self.run_button.state(["disabled"])
+        self.cache_button.state(["disabled"])
+        self.library_button.state(["disabled"])
+        self.library_run_button.state(["disabled"])
+        self.import_target_button.state(["disabled"])
+        self.refresh_target_button.state(["disabled"])
+        self.status_var.set("正在后台导入目标相并计算该结构的 XRD 缓存...")
+        self._write_log(f"开始导入目标相 CIF：\n{path}")
+        snapshot = {"cif_file": path, "library_db": self.library_var.get()}
+        thread = threading.Thread(target=self._target_import_worker, args=(snapshot,), daemon=True)
+        thread.start()
 
     def _run(self) -> None:
         if self.running:
@@ -2360,6 +2358,21 @@ class OphiuchusApp(tk.Tk):
         except Exception as exc:
             self.result_queue.put(("library_error", exc))
 
+    def _target_import_worker(self, snapshot: dict[str, object]) -> None:
+        try:
+            imported = import_target_cif_to_library(
+                str(snapshot["cif_file"]),
+                str(snapshot["library_db"]),
+            )
+            library = StructureLibrary(str(snapshot["library_db"]))
+            cached = build_library_xrd_cache(
+                library,
+                structure_ids=[str(imported["internal_id"])],
+            )
+            self.result_queue.put(("target_import_ok", {"imported": imported, "cached": cached}))
+        except Exception as exc:
+            self.result_queue.put(("target_import_error", exc))
+
     def _library_analysis_worker(self, run_id: int, snapshot: dict[str, object]) -> None:
         pending = None
         try:
@@ -2482,6 +2495,8 @@ class OphiuchusApp(tk.Tk):
         self.cache_button.state(["!disabled"])
         self.library_button.state(["!disabled"])
         self.library_run_button.state(["!disabled"])
+        self.import_target_button.state(["!disabled"])
+        self.refresh_target_button.state(["!disabled"])
         if kind == "analysis_ok":
             self.force_recompute_var.set(False)
             self._show_result(payload["result"])
@@ -2495,6 +2510,13 @@ class OphiuchusApp(tk.Tk):
             self._write_summary(guidance)
             self._write_log(guidance)
             messagebox.showerror("结构库导入失败", guidance)
+        elif kind == "target_import_ok":
+            self._show_target_import_result(payload)
+        elif kind == "target_import_error":
+            self.status_var.set("目标相导入失败。")
+            guidance = self._friendly_error(payload)
+            self._write_log(guidance)
+            messagebox.showerror("目标相导入失败", guidance)
         elif kind == "mp_ok":
             self._show_mp_result(payload)
         elif kind == "mp_error":
@@ -3001,6 +3023,36 @@ class OphiuchusApp(tk.Tk):
         self._write_log("\n".join(lines))
         self._refresh_library_table()
         self._refresh_target_phase_options()
+
+    def _show_target_import_result(self, payload: dict[str, object]) -> None:
+        imported = payload["imported"]
+        cached = payload["cached"]
+        elements = [str(item) for item in imported.get("elements") or []]
+        if elements:
+            self.elements_var.set(" ".join(elements))
+        self._refresh_library_table()
+        self._refresh_target_phase_options()
+        internal_id = str(imported.get("internal_id") or "")
+        selected_label = next(
+            (label for label, candidate_id in self.target_phase_options.items() if candidate_id == internal_id),
+            "",
+        )
+        if selected_label:
+            self.target_phase_var.set(selected_label)
+            self.status_var.set("目标相已导入并选中。")
+        else:
+            self.status_var.set("目标相已导入，但未进入当前元素范围；请检查 CIF。")
+        lines = [
+            "目标相 CIF 导入完成。",
+            f"结构：{imported.get('formula', '')}",
+            f"内部 ID：{internal_id}",
+            f"主元素：{' '.join(elements)}",
+            f"当前目标相：{self.target_phase_var.get() or '未选中'}",
+            f"XRD 缓存：新模拟 {cached.get('simulated', 0)}，已有 {cached.get('cached', 0)}，失败 {cached.get('failed', 0)}",
+        ]
+        warnings = cached.get("warnings") or []
+        lines.extend(f"- {warning}" for warning in warnings)
+        self._write_log("\n".join(lines))
 
     def _show_mp_result(self, payload: dict[str, object]) -> None:
         self.status_var.set("Materials Project 采集完成。")

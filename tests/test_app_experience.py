@@ -701,6 +701,87 @@ Sn1 1.0 0.0 0.0 0.0 Sn
         self.assertIn("ZrVGeSn", imported["label"])
         self.assertEqual([row["label"] for row in rows], [imported["label"]])
 
+    def test_import_target_cif_starts_background_worker_without_blocking_tk(self):
+        app = OphiuchusApp()
+        try:
+            app.library_var.set("library.sqlite")
+            with (
+                mock.patch("ophiuchus.app.filedialog.askopenfilename", return_value="target.cif"),
+                mock.patch("ophiuchus.app.threading.Thread") as thread,
+                mock.patch("ophiuchus.app.import_target_cif_to_library") as importer,
+            ):
+                app._import_target_phase_cif()
+
+            thread.assert_called_once()
+            thread.return_value.start.assert_called_once()
+            importer.assert_not_called()
+            self.assertTrue(app.running)
+            self.assertTrue(app.import_target_button.instate(["disabled"]))
+        finally:
+            app.destroy()
+
+    def test_target_import_worker_only_builds_cache_for_imported_structure(self):
+        app = OphiuchusApp()
+        imported = {
+            "internal_id": "target-structure-id",
+            "formula": "Zr3V3GeSn4",
+            "elements": ["Zr", "V", "Ge", "Sn"],
+            "label": "old display label",
+        }
+        try:
+            with (
+                mock.patch("ophiuchus.app.import_target_cif_to_library", return_value=imported),
+                mock.patch("ophiuchus.app.StructureLibrary") as library_type,
+                mock.patch(
+                    "ophiuchus.app.build_library_xrd_cache",
+                    return_value={"checked": 1, "simulated": 1, "cached": 0, "failed": 0},
+                ) as build_cache,
+            ):
+                app._target_import_worker({"cif_file": "target.cif", "library_db": "library.sqlite"})
+
+            kind, payload = app.result_queue.get_nowait()
+            self.assertEqual(kind, "target_import_ok")
+            self.assertEqual(payload["imported"]["internal_id"], "target-structure-id")
+            build_cache.assert_called_once_with(
+                library_type.return_value,
+                structure_ids=["target-structure-id"],
+            )
+        finally:
+            app.destroy()
+
+    def test_target_import_result_replaces_stale_elements_and_selects_structure_id(self):
+        app = OphiuchusApp()
+        try:
+            app.elements_var.set("Fe Ge")
+
+            def refresh_options():
+                app.target_phase_options = {
+                    "Zr3V3GeSn4 | target | current-label": "target-structure-id",
+                    "ZrVGeSn | local | another": "another-id",
+                }
+                app.target_phase_combo.configure(values=tuple(app.target_phase_options))
+
+            payload = {
+                "imported": {
+                    "internal_id": "target-structure-id",
+                    "formula": "Zr3V3GeSn4",
+                    "elements": ["Zr", "V", "Ge", "Sn"],
+                    "label": "stale-label-that-must-not-be-used",
+                },
+                "cached": {"checked": 1, "simulated": 1, "cached": 0, "failed": 0},
+            }
+            with (
+                mock.patch.object(app, "_refresh_library_table"),
+                mock.patch.object(app, "_refresh_target_phase_options", side_effect=refresh_options),
+            ):
+                app._show_target_import_result(payload)
+
+            self.assertEqual(app.elements_var.get(), "Zr V Ge Sn")
+            self.assertEqual(app.target_phase_var.get(), "Zr3V3GeSn4 | target | current-label")
+            self.assertIn("已导入并选中", app.status_var.get())
+        finally:
+            app.destroy()
+
     def test_library_manager_rows_and_enabled_toggle(self):
         cif_text = """
 data_Fe

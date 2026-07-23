@@ -7,6 +7,7 @@
 - Added Hill-Howard/ZMV mass-fraction cross-checking, three-start stability tests, and a hard gate that hides untrustworthy wt%. (v0.5.0-dev)
 - Added direct RIETAN total-profile, background, residual, and per-phase reflection rendering with explicit-only export. (v0.5.0-dev)
 - Added opt-in real-engine tests for the official three-phase example and RIETAN 3.12 high-angle references for Zr3V3GeSn4 and ZrFe6Ge4. (v0.5.0-dev)
+- Fixed target-CIF import so parsing and single-structure XRD caching run in the background, stale element scope is replaced from the CIF, and the imported structure is selected by internal ID. (v0.5.0-dev)
 
 ## v0.4.0-dev - 2026-07-01
 
